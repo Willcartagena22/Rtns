@@ -1,0 +1,84 @@
+*-----------------------------------------------------------------------------
+* <Rating>-43</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.OFS.COMISION.MONEDA.AZUL
+*-----------------------------------------------------------------------------
+
+    $INSERT I_COMMON
+    $INSERT I_EQUATE
+    $INSERT I_F.TELLER.FINANCIAL.SERVICES
+    $INSERT I_F.FUNDS.TRANSFER
+    $INSERT I_F.AC.LOCKED.EVENTS
+*-----------------------------------------------------------------------------
+    GOSUB INICIALIZACION
+    GOSUB OPENFILE
+    GOSUB PROCESS
+
+INICIALIZACION:
+
+ 	FN_TELLER 		= 'F.TELLER.FINANCIAL.SERVICES'
+ 	F_TELLER 		= ''
+ 	FN.LOCK = 'F.AC.LOCKED.EVENTS$HIS'
+	F.LOCK  = ''
+	F.FUNDSTRANFER.APP  = 'F.FUNDS.TRANSFER'
+    FN.FUNDSTRANFER.APP = ''
+    
+    ID.PARAM.OFS = 'OFS.ABONO.DIARIO.COL'
+    RETURN
+
+OPENFILE:
+    CALL OPF(FN_TELLER, F_TELLER)
+    CALL OPF(FN.LOCK, F.LOCK)
+    CALL OPF(F.FUNDSTRANFER.APP,FN.FUNDSTRANFER.APP)
+    RETURN
+
+
+PROCESS:
+	;*Extraer Campos Locales
+		Y.APPL   = "AC.LOCKED.EVENTS" : FM : "TELLER.FINANCIAL.SERVICES"
+		Y.FIELD  = "LF.CHQ.BENEFICI" : VM :'LF.AMT.BLUE': FM
+		Y.FIELD := "LF.DOC.CLIEN.EX" : VM : "LF.NOM.PER"  : VM : "LF.NUM.REF" 
+		Y.POS = ""
+		CALL MULTI.GET.LOC.REF(Y.APPL,Y.FIELD,Y.POS)
+		LF.BENEFICIARIO     = Y.POS<1,1>
+		LF.AMT.BLUE			= Y.POS<1,2>
+		LF.DUI              = Y.POS<2,1>
+		LF.BENEFICIARIO.TFS = Y.POS<2,2>
+		LF.NUM.REF 			= Y.POS<2,3>
+		
+		Y.LOCK = R.NEW(TFS.LOCAL.REF)<1,LF.NUM.REF>
+
+		CALL CACHE.READ(FN.LOCK, Y.LOCK, R.LOCK, E.LOCK)
+		MONTO = R.LOCK<AC.LCK.LOCAL.REF><1, LF.AMT.BLUE>
+
+        CUENTADEBITO=R.NEW(TFS.PRIMARY.ACCOUNT)
+        AC.LOCK=R.LOCK<AC.LCK.LOCAL.REF><1,LF.NUM.REF>
+
+
+*-------------RECORD PARA FT
+    TRANS.ID = ''
+    R.FT = ''
+    R.FT<FT.DEBIT.ACCT.NO> = CUENTADEBITO
+    R.FT<FT.CREDIT.ACCT.NO> = 'PL52024'
+    R.FT<FT.DEBIT.CURRENCY> = 'USD'
+    R.FT<FT.DEBIT.AMOUNT> =MONTO
+    R.FT<FT.ORDERING.BANK> = 'COMISIONMONEDAAZUL'
+    R.FT<FT.ORDERING.CUST> = AC.LOCK
+    R.FT<FT.TRANSACTION.TYPE> ='AC'
+    Y.OUT = ''
+
+    CALL SLV.UTIL.OFS.TRX(TRANS.ID,R.FT,ID.PARAM.OFS,Y.OUT)
+
+    RETURN
+*
+ESCRIBIR.ARCHIVO:
+    DIR.NAME= 'MonedaAzul'
+    R.ID   = 'Moneda_Azul ':TODAY:'.txt'
+;* hacer que escriba un archivo
+
+    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+    END
+    CLOSESEQ SEQ.PTR
+    RETURN
+    END

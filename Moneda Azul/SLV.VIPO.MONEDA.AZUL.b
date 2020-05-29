@@ -1,0 +1,146 @@
+*-----------------------------------------------------------------------------
+* <Rating>32</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.VIPO.MONEDA.AZUL
+
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_EQUATE
+    $INSERT I_F.FUNDS.TRANSFER
+    $INSERT I_F.EB.SLV.COMISIONES.TARJETAS
+    $INSERT I_F.EB.SLV.GLOBAL.PARAM
+    $INSERT I_F.TELLER.FINANCIAL.SERVICES
+    $INSERT I_F.CUSTOMER
+    $INSERT I_F.INDUSTRY
+    
+*-----------------------------------------------------------------------------
+    GOSUB INIT
+    GOSUB OPENFILE
+    GOSUB PROCESS
+    GOSUB FACTURAR
+
+
+INIT:
+
+ 	FN_TELLER 		= 'F.TELLER.FINANCIAL.SERVICES'
+ 	F_TELLER 		= ''
+    FN_SLVPA 		= 'F.EB.SLV.GLOBAL.PARAM'
+    F_SLVPA 		= ''
+    FN_CUS 			= 'F.CUSTOMER'
+    F_CUS 			= ''
+    FN_INDUST		= 'F.INDUSTRY'
+    F_INDUST 		= ''
+
+    RETURN
+
+OPENFILE:
+
+    CALL OPF(FN_TELLER, F_TELLER)
+    CALL OPF(FN_SLVPA,F_SLVPA)
+    CALL OPF(FN_CUS, F_CUS)
+    CALL OPF(FN_INDUST, F_INDUST)    
+
+    RETURN
+
+PROCESS:
+
+    ID_TNX= ID.NEW
+
+	CUSTOMER=R.NEW(TFS.PRIMARY.CUSTOMER)
+	MONTO=R.NEW(TFS.AMOUNT.CR)
+
+*	ID_TNX 			= 'TFSPRUEBA'
+*
+*	CUSTOMER='100944'
+*	MONTO='2.20'
+	GOSUB DATOS.CLIENTE
+
+RETURN
+
+
+DATOS.CLIENTE:
+;* DATOS DEL CLIENTE
+	CALL F.READ(FN_CUS, CUSTOMER, R_CUS, F_CUS, F_CUS_ERR)
+	;*buscando numero de NIT
+    NO_MVNIT	=	DCOUNT(R_CUS<EB.CUS.LEGAL.ID>,VM)
+    FOR Y=1 TO NO_MVNIT
+        BEGIN CASE
+            CASE  R_CUS<EB.CUS.LEGAL.DOC.NAME><1,Y> EQ 'NUM.IDEN.TRIBUT'
+                NUMERO_NIT = R_CUS<EB.CUS.LEGAL.ID><1,Y>
+            CASE 	R_CUS<EB.CUS.LEGAL.DOC.NAME><1,Y> EQ 'REGISTRO.FISCAL.IVA'
+                NUMERO_NRC = R_CUS<EB.CUS.LEGAL.ID><1,Y>
+        END CASE
+    NEXT Y
+    CALL GET.LOC.REF('CUSTOMER', 'LF.TYPE.CUST', POSTypeCus)
+	TIPO_CLIENTE = R_CUS<EB.CUS.LOCAL.REF, POSTypeCus>[1,3]
+
+    IF TIPO_CLIENTE EQ 'NAT' THEN
+        ;* Encontrando el nombre completo
+        PRIMER.NOMBRE = R_CUS<EB.CUS.NAME.1>
+        SEGUNDO.NOMBRE = R_CUS<EB.CUS.NAME.2>
+        TERCER.NOMBRE = R_CUS<EB.CUS.GIVEN.NAMES>
+        PRIMER.APELLIDO = R_CUS<EB.CUS.TEXT>
+        SEGUNDO.APELLIDO = R_CUS<EB.CUS.FAMILY.NAME>
+        APELLIDO.CASADA = R_CUS<EB.CUS.PREVIOUS.NAME>
+        NOMBRES = PRIMER.NOMBRE : ' ' : SEGUNDO.NOMBRE : ' ' : TERCER.NOMBRE
+        APELLIDOS = PRIMER.APELLIDO : ' ' : SEGUNDO.APELLIDO : ' ' : APELLIDO.CASADA
+        S_CUS_NAME = TRIM(NOMBRES : ' ' : APELLIDOS)
+    END ELSE IF TIPO_CLIENTE EQ 'JUR' THEN
+    
+        ;* Encontrando la razon social
+        CALL GET.LOC.REF('CUSTOMER', 'LF.RAZON.SOCIAL', POS.RAZON.SOCIAL)
+        S_CUS_NAME = R_CUS<EB.CUS.LOCAL.REF, POS.RAZON.SOCIAL>
+      	;*Se le da tratamiento a multivalor(definir una rubroutine general para tratamiento de campos y caracteres)
+      	S_CUS_NAME = SWAP(R_CUS<EB.CUS.LOCAL.REF, POS.RAZON.SOCIAL>, @SM, ' ') 
+    END
+
+;* Componiendo la direccion del ciente
+    CALL GET.LOC.REF('CUSTOMER', 'LF.CANTON', POS.CANTON)
+    CANTON = R_CUS<EB.CUS.LOCAL.REF, POS.CANTON>
+    CALL GET.LOC.REF('CUSTOMER', 'LF.COLONIA', POS.COLONIA)
+    COLONIA = R_CUS<EB.CUS.LOCAL.REF, POS.COLONIA>
+    CALL GET.LOC.REF('CUSTOMER', 'LF.CALLE', POS.CALLE)
+    CALLE = R_CUS<EB.CUS.LOCAL.REF, POS.CALLE>
+    CALL GET.LOC.REF('CUSTOMER', 'LF.AVENIDA', POS.AVENIDA)
+    AVENIDA = R_CUS<EB.CUS.LOCAL.REF, POS.AVENIDA>
+    CALL GET.LOC.REF('CUSTOMER', 'LF.NUM.DEPTO', POS.NUM.DEPTO)
+    NUM.DEPTO = R_CUS<EB.CUS.LOCAL.REF, POS.NUM.DEPTO>
+    DIREC_CLIENTE = TRIM(CANTON : ' ' : COLONIA : ' ' : CALLE : ' ' : AVENIDA : ' ' : NUM.DEPTO)
+
+;* Encontrando el giro comercial (actividad económica)
+    CODIGO_GIRO =R_CUS<EB.CUS.INDUSTRY>
+    
+    CALL F.READ(FN_INDUST, CODIGO_GIRO, R_INDUST, F_INDUST, F.ERR.IND)
+    GIRO_COMERCIAL = R_INDUST<EB.IND.DESCRIPTION>
+
+RETURN
+
+
+
+FACTURAR:
+
+CALL EB.CALLJ(THIS.PACKAGE.CLASS, '$' : THIS.METHOD, MONTO, CALLJ.RESPONSE, CALLJ.ERROR)
+CANTILET 	=	CALLJ.RESPONSE
+NOMBRE.ARCHIVO=CUSTOMER:'-':'52024':'-':ID_TNX
+CALL SLV.VIPO.VISA.DEB(MONTO,MONTO,'',GIRO_COMERCIAL,DIREC_CLIENTE,NUMERO_NIT,S_CUS_NAME,NOMBRE.ARCHIVO,CANTILET,'DETALLES!Transferencias MonedAzul ':ID_TNX:'!0.00!0.00!':MONTO:'!','DETALLES!':'!':'!':'!','DETALLES!!':'!':'!',MONTO) 
+
+RETURN
+
+
+
+
+ESCRIBIR.ARCHIVO:
+    DIR.NAME= 'MonedaAzul'
+    R.ID   = 'Moneda_Azul ':TODAY:'.txt'
+;* hacer que escriba un archivo
+
+    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+    END
+    CLOSESEQ SEQ.PTR
+    RETURN
+
+        END
+    

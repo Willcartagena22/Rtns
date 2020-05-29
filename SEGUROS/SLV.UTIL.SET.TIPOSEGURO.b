@@ -1,0 +1,98 @@
+*-------------------------------------------------------------------------------------
+* <Rating>-31</Rating>
+*-------------------------------------------------------------------------------------
+    SUBROUTINE SLV.UTIL.SET.TIPOSEGURO
+*-------------------------------------------------------------------------------------
+* RUTINA QUE COMANDA EL COMPORTAMIENTO DE LOS CAMPOS RELACIONADOS AL CLIENTE ASEGURADO
+*-------------------------------------------------------------------------------------
+* Modification History :
+* Autor    	Fecha     		Version.
+* SFUSILLO 	11.09.2017 		Initial Code
+* SFUSILLO 					Esta rutina se utiliza para la funcionalidad de SEGUROS 
+*							y realiza cambios al comportamiento de sus campos
+*-------------------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_ENQUIRY.COMMON
+    $INSERT I_EQUATE
+	$INSERT I_F.EB.SLV.ALTA.SEGURO
+	$INSERT I_F.EB.SLV.PLAN.SEGURO
+	$INSERT I_F.CUSTOMER
+	$INSERT I_F.EB.LOOKUP
+
+    GOSUB INIT
+    GOSUB OPENFILE
+    GOSUB PROCESS
+
+    RETURN
+
+INIT:
+;*ARCHIVOS
+*-----------------------------------------------------------------------------
+    FN.ALTA.SEG 	= 'F.EB.SLV.ALTA.SEGURO'
+    F.ALTA.SEG	= ''
+    FN.PLAN.SEGURO 	= 'F.EB.SLV.PLAN.SEGURO'
+    F.PLAN.SEGURO	= ''
+    FN.LOOKUP = 'F.EB.LOOKUP'
+    F.LOOKUP  = ''
+    Y.VERSION = APPLICATION:PGM.VERSION
+   
+	
+ RETURN
+
+*APERTURA DE ARCHIVOS A USAR
+*-----------------------------------------------------------------------------
+OPENFILE:
+    CALL OPF(FN.ALTA.SEG,F.ALTA.SEG)
+    CALL OPF(FN.PLAN.SEGURO,F.PLAN.SEGURO)
+    CALL OPF(FN.LOOKUP, F.LOOKUP)
+RETURN
+
+PROCESS:
+	
+ BEGIN CASE
+    CASE Y.VERSION EQ 'EB.SLV.ALTA.SEGURO,SLV.INPUT.ALTA'
+		VAR.ID.TIPO.SEGURO=R.NEW(EB.SEG.ID.TIPO.SEGURO)
+		CALL F.READ(FN.PLAN.SEGURO,VAR.ID.TIPO.SEGURO,R.PLAN.SEG,F.PLAN.SEGURO,Y.ERR)
+		R.NEW(EB.SEG.TIPO.SEGURO)=R.PLAN.SEG<EB.SLV.PLAN.NOM.TIPO.SEGURO>:" PLAN ": R.PLAN.SEG<EB.SLV.PLAN.NOM.PLAN.SEGURO>
+		R.NEW(EB.SEG.COD.PLAN)=R.PLAN.SEG<EB.SLV.PLAN.COD.PLAN.SEGURO>
+	CASE 1
+		IF R.NEW(EB.SEG.NO.TARJETA) NE '' AND (R.NEW(EB.SEG.MEDIO.PAGO) EQ 'TCO' OR R.NEW(EB.SEG.MEDIO.PAGO) EQ 'TCA' ) THEN
+			R.NEW(EB.SEG.REFERENCIA)=''
+		END
+		VAR.PRODUCTO.BANCARIO=R.NEW(EB.SEG.RESERVADO.2)
+		IF VAR.PRODUCTO.BANCARIO NE '' THEN
+		K.STMT.ARRANGEMENT 	= "SELECT " : FN.LOOKUP : " WITH DATA.NAME EQ '" : VAR.PRODUCTO.BANCARIO :"' "
+		CALL EB.READLIST(K.STMT.ARRANGEMENT, ARRANGEMENT.LIST, R.LOOK, NO.OF.RECS, Y.ARRANGEMENT.ERR1)
+		IF NO.OF.RECS GT 0 THEN
+		R.NEW(EB.SEG.MEDIO.PAGO)=FIELD(ARRANGEMENT.LIST<1>,'*',2)
+		END
+		END
+
+		VAR.COD.PLAN.SEG=R.NEW(EB.SEG.COD.PLAN)
+		K.STMT.ARRANGEMENT 	= "SELECT " : FN.PLAN.SEGURO : " WITH COD.PLAN.SEGURO EQ " : VAR.COD.PLAN.SEG :" "
+		CALL EB.READLIST(K.STMT.ARRANGEMENT, ARRANGEMENT.LIST, R.NOSEG, NO.OF.RECS, Y.ARRANGEMENT.ERR1)
+		VAR.ID.TIPO.SEGURO=ARRANGEMENT.LIST<1>
+		IF VAR.ID.TIPO.SEGURO NE '' THEN
+		R.NEW(EB.SEG.ID.TIPO.SEGURO)=VAR.ID.TIPO.SEGURO
+		CALL F.READ(FN.PLAN.SEGURO,VAR.ID.TIPO.SEGURO,R.PLAN.SEG,F.PLAN.SEGURO,Y.ERR)
+		R.NEW(EB.SEG.TIPO.SEGURO)=R.PLAN.SEG<EB.SLV.PLAN.NOM.TIPO.SEGURO>:" PLAN ": R.PLAN.SEG<EB.SLV.PLAN.NOM.PLAN.SEGURO>
+		R.NEW(EB.SEG.COD.PLAN)=R.PLAN.SEG<EB.SLV.PLAN.COD.PLAN.SEGURO>
+		END
+		ELSE
+			V_NAME_FIELD= EB.SEG.COD.PLAN
+			STRERR ='SEG014'
+			AF  = V_NAME_FIELD
+		    AV 	= 1
+		    ETEXT = STRERR
+		    CALL STORE.END.ERROR
+		    
+		END
+	END CASE
+	
+
+RETURN
+*-----------------------------------------------------------------------------
+    END
+    
+    
+   

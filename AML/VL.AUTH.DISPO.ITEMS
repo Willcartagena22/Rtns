@@ -1,0 +1,50 @@
+*-----------------------------------------------------------------------------
+* <Rating>0</Rating>
+*-----------------------------------------------------------------------------
+    SUBROUTINE VL.AUTH.DISPO.ITEMS
+
+*-----------------------------------------------------------------------------
+*                M O D I F I C A T I O N  H I S T O R Y
+*-----------------------------------------------------------------------------
+* 25/07/12 - Task 450690
+* 			 If dispo items in IHLD then form the ofs message to authorsie the dispo items
+*
+*-----------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_EQUATE
+    $INSERT I_F.COMPANY
+    $INSERT I_F.DISPO.ITEMS
+
+    LOCATE "VL" IN R.COMPANY(EB.COM.APPLICATIONS)<1,1> SETTING VL.INSTALLED ELSE
+        RETURN
+    END
+    APPL.NAME = 'DISPO.ITEMS'
+    OFS.FUNC = 'I'
+    OFS.PROCESS = 'PROCESS'
+    OFS.VERSION = 'DISPO.ITEMS,AML'
+    GTSMODE = ''
+    OFS.MSG = ''
+    TRANSACTION.ID = ID.NEW:"*":R.COMPANY(EB.COM.MNEMONIC)
+
+    R.DISPO.ITEMS = ''
+    FN.DISPO.ITEMS = "F.DISPO.ITEMS$NAU"
+    F.DISPO.ITEMS = ""
+    CALL OPF(FN.DISPO.ITEMS,F.DISPO.ITEMS)
+
+    YERR = ''
+    CALL F.READ(FN.DISPO.ITEMS, TRANSACTION.ID,R.DISPO.ITEMS,F.DISPO.ITEMS,YERR)
+
+    IF R.DISPO.ITEMS<DISP.ITM.RECORD.STATUS> EQ 'IHLD' THEN
+
+        CALL OFS.BUILD.RECORD(APPL.NAME,OFS.FUNC,OFS.PROCESS,OFS.VERSION,GTSMODE,NO.OF.AUTH,TRANSACTION.ID,R.DISPO.ITEMS,OFS.MSG)
+
+        OFS.MSG.ID = ''
+        OFS.SOURCE.ID = 'OFS.LOAD'
+        OPTIONS = ''
+        CALL OFS.POST.MESSAGE(OFS.MSG, OFS.MSG.ID, OFS.SOURCE.ID, OPTIONS)
+
+    END
+
+    RETURN
+    END
+

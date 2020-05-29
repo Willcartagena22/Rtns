@@ -1,0 +1,344 @@
+*-----------------------------------------------------------------------------
+* <Rating>74</Rating>
+*-----------------------------------------------------------------------------
+    SUBROUTINE SLV.DE.MAP.NA.MH
+*-----------------------------------------------------------------------------
+*
+* Descripcion: RTN que se ocupa para el envio de la Nota de Abono al Colector(en este caso MH)
+*
+*-----------------------------------------------------------------------------
+* Modification History : 
+* 1.0 		*******		2017.**.**		Inicial  
+* 2.0		RCORTES		2017.08.31		- Actualización de referencia de mensajes de error cuando llega con bandera -99
+*										- 
+*-----------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_EQUATE
+    $INSERT I_TSS.COMMON
+    $INSERT I_GTS.COMMON
+    $INSERT I_F.EB.SLV.COL.FRONT.END
+    $INSERT I_F.ACCOUNT
+    $INSERT I_F.BATCH
+*-----------------------------------------------------------------------------
+
+
+*    IF OFS$OPERATION EQ 'PROCESS' THEN
+    GOSUB INICIALIZAR
+    GOSUB OPENFILE
+    GOSUB PROCESS
+*    END
+
+INICIALIZAR:
+    FN.COLECTOR	= 'F.EB.SLV.COL.FRONT.END'
+    F.COLECTOR	= ''
+
+    FN.ACC 		= 'F.ACCOUNT'
+    F.ACC 		= ''
+    
+    FN.BATCH 	= 'F.BATCH'
+    F.BATCH  	= ''
+    
+RETURN
+    
+OPENFILE:
+    CALL OPF(FN.COLECTOR, F.COLECTOR)
+    CALL OPF(FN.ACC,F.ACC)
+    CALL OPF(FN.BATCH,F.BATCH)
+RETURN
+
+PROCESS:
+   	FLAG       = R.NEW(EB.SLV8.RESERVADO.39)
+    CANAL.PAGO = R.NEW(EB.SLV8.RESERVADO.38)
+    ID.VERSION = ID.NEW
+    
+    ;*********** <DEBUG> ************
+    ;*FLAG       = '2' ;*R.NEW(EB.SLV8.RESERVADO.39)
+    ;*CANAL.PAGO = 'TCE' ;*R.NEW(EB.SLV8.RESERVADO.38)
+    ;*ID.VERSION = '01-3672' ;*ID.NEW
+    ;*********** </DEBUG> ***********  
+    
+    ;* validacion si es pago (flag = 2) o si es prevalidacion de autorización (flag = -99)
+    IF FLAG EQ '2' THEN
+						    TEXTO.ARCHIVO = '----------- CONFIRMACION DE PAGO -----------'
+						    GOSUB ESCRIBIR.ARCHIVO
+						    TEXTO.ARCHIVO = TIMEDATE() : ' | ID >> ' : ID.VERSION : ' | Servicio >> ' : R.NEW(EB.SLV8.RESERVADO.17) : ' | ' : R.NEW(EB.SLV8.RESERVADO.16) : ' >> ' : R.NEW(EB.SLV8.RESERVADO.1)
+						    GOSUB ESCRIBIR.ARCHIVO						    
+    	;* invocacion de metodo CINTEX para confirmar pago a colector 
+       GOSUB NOTA.ABONO
+       
+    						TEXTO.ARCHIVO = '--------------------------------------------'
+						    GOSUB ESCRIBIR.ARCHIVO       	
+    END
+    ELSE IF FLAG EQ '-99' AND CANAL.PAGO EQ 'TCE' THEN 
+    						TEXTO.ARCHIVO = '----------- VALIDACION PRE AUTORIZACION - TCE -----------'
+						    GOSUB ESCRIBIR.ARCHIVO
+						    TEXTO.ARCHIVO = TIMEDATE() : ' | ID >> ' : ID.VERSION : ' | Servicio >> ' : R.NEW(EB.SLV8.RESERVADO.17) : ' | ' : R.NEW(EB.SLV8.RESERVADO.16) : ' >> ' : R.NEW(EB.SLV8.RESERVADO.1)
+						    GOSUB ESCRIBIR.ARCHIVO
+						    
+         ;*VALIDAMOS SI EL NPE QUE SE ESTA ENVIANDO NO HA SIDO PAGADO.
+         GOSUB VALIDATE.COLECTOR.PAY
+         GOSUB VALIDATE.COB.T24
+         						TEXTO.ARCHIVO = 'PASO 1: VALIDACION DE COB Y SI HA SIDO PAGADO CON ANTICIPACION'
+							    GOSUB ESCRIBIR.ARCHIVO
+         						TEXTO.ARCHIVO = ' + Pagos encontrados >> ' : NPE.RECORD.COUNT : ' | Status Batch >> ' : STATUS.BATCH  
+							    GOSUB ESCRIBIR.ARCHIVO
+							    
+         IF NPE.RECORD.COUNT EQ 0 AND STATUS.BATCH EQ 0 OR STATUS.BATCH EQ 2 THEN
+                GOSUB VALIDATE.CORPORATE.PAY
+                R.NEW(EB.SLV8.RESERVADO.15) = LST.ITEM.RESPONSE<4>
+                R.NEW(EB.SLV8.RESERVADO.39) = LST.ITEM.RESPONSE<3>
+         END
+         ELSE
+                GOSUB GET.ERROR.MESSAGE
+                R.NEW(EB.SLV8.RESERVADO.15) = ERROR.DESCRIPTION
+                R.NEW(EB.SLV8.RESERVADO.39) = '-2'
+         END
+         
+    						TEXTO.ARCHIVO = '---------------------------------------------------------'
+						    GOSUB ESCRIBIR.ARCHIVO
+						             
+    END
+    
+RETURN
+
+
+NOTA.ABONO:
+;*DEFINICION DE PARAMETROS
+
+*    HORA = TIMEDATE()[1,8]
+*    FECHA = OCONV(DATE(),"D/")
+*    TIME = FECHA[4,2]:'/':FECHA[1,2]:'/':FECHA[7,4]:' ': HORA
+
+;*********** <DEBUG> ************
+*ID.VERSION 		= '01-990'
+*TOKEN.NPE 			= '0463000004473220170114051000004578'
+*ID.FT 				= 'FT152212QBY4'
+*MONTO 				= '447.32'
+*NUMERO.COLECTOR 	= '01'
+*CHANNEL 			= 'TCIB'
+*AGENCIA 			= 'SV0010001'
+*CODIGO.CLIENTE 	= 'RCORTESBI'
+*SERVICIO 			= 'NPEMH'
+*NUMERO.CUENTA 		= '10000000008654'
+*TYPE.INPUT 		= 'NPE'
+;*********** </DEBUG> ***********  
+
+    ID.VERSION 		= ID.NEW
+    TOKEN.NPE 		= R.NEW(EB.SLV8.RESERVADO.1)
+    ID.FT 			= R.NEW(EB.SLV8.RESERVADO.28)
+    MONTO 			= R.NEW(EB.SLV8.RESERVADO.14)
+    NUMERO.COLECTOR = R.NEW(EB.SLV8.RESERVADO.3)
+    CHANNEL 		= R.NEW(EB.SLV8.RESERVADO.38)
+    AGENCIA 		= R.NEW(EB.SLV8.RESERVADO.23)
+    CODIGO.CLIENTE 	= R.NEW(EB.SLV8.RESERVADO.43)
+    SERVICIO 		= R.NEW(EB.SLV8.RESERVADO.17)
+    TRANSACCION.INTITUCION 	= R.NEW(EB.SLV8.RESERVADO.6)
+    NUMERO.INSTITUCION 		= R.NEW(EB.SLV8.RESERVADO.2)
+    NUMERO.CUENTA 			= R.NEW(EB.SLV8.RESERVADO.4)
+	TYPE.INPUT 				= R.NEW(EB.SLV8.RESERVADO.16)
+
+    IF CHANNEL EQ 'TCIB' OR CHANNEL EQ 'TCE' THEN
+        CODIGO.CAJERO = 'PAGOES0000'
+    END
+
+;*OBTENDIENDO EL SALDO DE LA CUENTA
+    GOSUB SALDO.CUENTA
+
+	;*CALLJ.ARGUMENTS.CLT = '01-3672~FT15221T5VF8~6.23~01~TCE~SV0010001~NEYINPUTTER~PAGOES0000~~~10000000005329~83719.66~NPE~NPEMH~0463000000062320171223050000021475'
+						        	
+    THIS.PACKAGE.CLASS 	="com.bancoazul.collector.Collector";* "com.bancoazul.t24colecturia.ColectorPEXMWS"
+    THIS.METHOD.CLT		= "setPayment2"
+    CALLJ.ARGUMENTS.CLT = ID.VERSION:'~':ID.FT:'~':MONTO:'~':NUMERO.COLECTOR:'~':CHANNEL:'~':AGENCIA:'~':CODIGO.CLIENTE:'~':CODIGO.CAJERO:'~':TRANSACCION.INTITUCION:'~':NUMERO.INSTITUCION:'~':NUMERO.CUENTA:'~':WORKING.BALANCE:'~':TYPE.INPUT:'~':SERVICIO:'~':TOKEN.NPE
+    CALLJ.ERROR.SMS 	= " "
+    CALLJ.RESPONSE.CLT	= " "
+
+							    TEXTO.ARCHIVO = 'PASO 2: NOTA ABONO - INVOCANDO METODO CINTEX <<setPaymet>> '
+							    GOSUB ESCRIBIR.ARCHIVO
+							    TEXTO.ARCHIVO = ' + Paremetro de Entrada: ': CALLJ.ARGUMENTS.CLT 
+							    GOSUB ESCRIBIR.ARCHIVO
+							    
+    CALL EB.CALLJ(THIS.PACKAGE.CLASS,THIS.METHOD.CLT,CALLJ.ARGUMENTS.CLT,CALLJ.RESPONSE.CLT,CALLJ.ERROR.CLT)
+    RESPUESTA.CALLJ = CALLJ.RESPONSE.CLT
+    
+    CRT 'RESPONSE >>> ':CALLJ.RESPONSE.CLT
+    
+    SEGMENTO.ESTADO = FIELD(RESPUESTA.CALLJ,'|',2)
+
+							    TEXTO.ARCHIVO =  ' + Parametro de salida >> ' : CALLJ.RESPONSE.CLT
+							    GOSUB ESCRIBIR.ARCHIVO
+
+
+	;*DEVUELVE RESPUESTA DE PAGO (SI = OK = SE REALIZO EL PAGO| NO = ERR = NO SE PUEDE REALIZAR EL PAGO)
+    IF SEGMENTO.ESTADO EQ 'OK' THEN
+
+        ;*NOTA DE ABONO
+        TRAMA.VOUCHER 				= CHANGE(RESPUESTA.CALLJ,'|',VM)
+
+        TRANSACCION.VALUE 			= FIELD(TRAMA.VOUCHER,VM,3)
+        TRANSACCION.TESO 			= FIELD(TRANSACCION.VALUE,':',2)
+        R.NEW(EB.SLV8.RESERVADO.18) = TRANSACCION.TESO
+
+        FECHA.APLICA.VALUE 			= FIELD(TRAMA.VOUCHER,VM,4)
+        FECHA.APLICACION 			= FIELD(FECHA.APLICA.VALUE,':',2)
+        R.NEW(EB.SLV8.RESERVADO.19) = FECHA.APLICACION
+
+        HORA.APLICA.VALUE 			= FIELD(TRAMA.VOUCHER,VM,5)
+        HORA.APLICACION 			= FIELD(HORA.APLICA.VALUE,':',2)
+        R.NEW(EB.SLV8.RESERVADO.20) = HORA.APLICACION
+
+        COD.RESULTADO.VALUE 		= FIELD(TRAMA.VOUCHER,VM,6)
+        CODIGO.RESULTADO 			= FIELD(COD.RESULTADO.VALUE,':',2)
+        R.NEW(EB.SLV8.RESERVADO.21) = CODIGO.RESULTADO
+
+        MENSAJE.VALUE 				= FIELD(TRAMA.VOUCHER,VM,7)
+        MENSAJE 					= FIELD(MENSAJE.VALUE,':',2)
+        R.NEW(EB.SLV8.RESERVADO.22) = MENSAJE
+
+        ;*CUENTA.ABONO = FIELD(TRAMA.VOUCHER,VM,8)
+        ;*CUENTA = FIELD(CUENTA.ABONO,':',2)
+        ;*R.NEW(EB.SLV8.RESERVADO.5) = CUENTA.ABONO
+
+        ;*@Username: Ronald Ortiz
+        ;*@Date: 20170509
+        ITEM.COUNT 					= DCOUNT(TRAMA.VOUCHER,VM)
+        CUENTA.ABONO 				= FIELD(TRAMA.VOUCHER,VM,ITEM.COUNT-1)
+        R.NEW(EB.SLV8.RESERVADO.5) 	= CUENTA.ABONO
+
+        ;*VALOR BANDERA
+        R.NEW(EB.SLV8.RESERVADO.39) = '3'
+        ;*FIN NOTA DE ABONO
+    END
+    ELSE
+	    SEGMENTO.ERROR 	= RESPUESTA.CALLJ
+	    ERROR 			= FIELD(SEGMENTO.ERROR,'|',3)
+	    R.NEW(EB.SLV8.RESERVADO.15) = ERROR
+	    R.NEW(EB.SLV8.RESERVADO.39) = "-2"
+	    
+							    TEXTO.ARCHIVO =  ' + Mensaje de Error >> ' : RESPUESTA.CALLJ
+							    GOSUB ESCRIBIR.ARCHIVO	    
+    END
+
+RETURN
+
+SALDO.CUENTA:
+							    							    
+;*LLAMADA AL CALLJ PARA OBTENER CUENTAS DEL COLECTOR SELECCIONADO
+    THIS.PACKAGE.CLASS 	= "com.bancoazul.collector.Collector"
+    THIS.METHOD.CLT		= "getAccounts"
+    CALLJ.ARGUMENTS.CLT = NUMERO.COLECTOR
+    CALLJ.ERROR.SMS 	= ""
+    CALLJ.RESPONSE.CLT 	= " "
+
+							    TEXTO.ARCHIVO = 'PASO 1: SALDO CUENTA - INVOCANDO METODO CINTEX <<getAccounts>> '
+							    GOSUB ESCRIBIR.ARCHIVO
+							    TEXTO.ARCHIVO =  ' + Parametro de entrada >> ' : CALLJ.ARGUMENTS.CLT
+							    GOSUB ESCRIBIR.ARCHIVO
+
+
+    CALL EB.CALLJ(THIS.PACKAGE.CLASS,THIS.METHOD.CLT,CALLJ.ARGUMENTS.CLT,CALLJ.RESPONSE.CLT,CALLJ.ERROR.CLT)
+    RESPUESTA 			= CALLJ.RESPONSE.CLT
+    OBTENER.POS.ACC 	= FIELD(RESPUESTA,'|',6)
+    CC.RECAUDADORA 		= FIELD(OBTENER.POS.ACC,'-',2)
+						    
+							    TEXTO.ARCHIVO =  ' + Parametro de salida >> ' : CALLJ.RESPONSE.CLT
+							    GOSUB ESCRIBIR.ARCHIVO
+								TEXTO.ARCHIVO =  ' + Cuenta Recaudadora >> ' : CC.RECAUDADORA
+							    GOSUB ESCRIBIR.ARCHIVO
+							    
+    CALL F.READ(FN.ACC, CC.RECAUDADORA,RECORD.ACC,F.ACC,ERR.ACC)
+    WORKING.BALANCE 	= RECORD.ACC<AC.ONLINE.ACTUAL.BAL>
+    IF WORKING.BALANCE EQ '' THEN
+        WORKING.BALANCE = '0.00'
+    END
+
+RETURN
+
+
+
+;*@Author:Ronald Ortiz
+;*@Date:20170608
+;*@Description:
+VALIDATE.COLECTOR.PAY:
+    NPE 				= R.NEW(EB.SLV8.RESERVADO.1)
+    STMT.ARR.PAGOS.COL	= "SELECT ":FN.COLECTOR:" WITH RESERVADO.1 EQ '":NPE:"' AND RESERVADO.39 EQ '4' AND RESERVADO.16 EQ 'NPE'"
+    CALL EB.READLIST(STMT.ARR.PAGOS.COL, ARRANGEMENT.LIST,'',NO.OF.RECS,Y.ARRANGEMENT.ERR1)
+    NPE.RECORD.COUNT = NO.OF.RECS
+RETURN
+
+;*@Author:Ronald Ortiz
+;*@Date:20170612
+;*@Description:
+VALIDATE.COB.T24:
+	ID.BATCH = 'BNK/COB.INITIALISE'
+	CALL F.READ(FN.BATCH,ID.BATCH,RESPONSE.BATCH,F.BATCH,ERR.BATCH)
+	STATUS.BATCH = RESPONSE.BATCH<BAT.PROCESS.STATUS>
+RETURN
+
+
+;*@Author:Ronald Ortiz
+;*@Date:20170612
+;*@Description:
+VALIDATE.CORPORATE.PAY:
+
+    THIS.PACKAGE.CLASS 	= "com.bancoazul.collector.Collector";* "com.bancoazul.t24colecturia.ColectorPEXMWS"
+    THIS.METHOD.CLT		= "validationCorporateTransaction"
+    CALLJ.ARGUMENTS.CLT = ID.VERSION
+    CALLJ.ERROR.SMS 	= " "
+    CALLJ.RESPONSE.CLT 	= " "
+
+         						TEXTO.ARCHIVO = 'PASO 2: VALIDACIONES CINTEX <<validationCorporateTransaction>>'
+							    GOSUB ESCRIBIR.ARCHIVO
+								TEXTO.ARCHIVO = ' + Parametro de Entrada > ' : CALLJ.ARGUMENTS.CLT  
+							    GOSUB ESCRIBIR.ARCHIVO
+
+;*LLAMADA AL METODO CALLJ
+    CALL EB.CALLJ(THIS.PACKAGE.CLASS,THIS.METHOD.CLT,CALLJ.ARGUMENTS.CLT,CALLJ.RESPONSE.CLT,CALLJ.ERROR.CLT)
+    RESPUESTA.CINTEX 	= CHANGE(CALLJ.RESPONSE.CLT,'"','')
+    LST.ITEM.RESPONSE 	= CHANGE(RESPUESTA.CINTEX,'|',FM)
+    
+         						TEXTO.ARCHIVO = ' + Parametro de Salida > ' : RESPUESTA.CINTEX   
+							    GOSUB ESCRIBIR.ARCHIVO							    
+    
+RETURN
+
+;*@Author:Ronald Ortiz 
+;*@Date:20170612
+;*@Description:
+GET.ERROR.MESSAGE:
+    
+    IF NPE.RECORD.COUNT NE 0 THEN
+       CODIGO.ERROR = '011':'~':R.NEW(EB.SLV8.RESERVADO.3) ;* Actualizado v2.0
+    END
+    ELSE IF NPE.RECORD.COUNT EQ 0 AND STATUS.BATCH  EQ 1 OR STATUS.BATCH EQ 3 THEN
+       CODIGO.ERROR = '006' ;* Actualizado v2.0
+    END
+    
+    							TEXTO.ARCHIVO = ' + CINTEX Metodo <<getErrorMessage>> | Codigo de Error >> ' :  CODIGO.ERROR
+							    GOSUB ESCRIBIR.ARCHIVO
+							    
+    THIS.PACKAGE.CLASS 	= "com.bancoazul.collector.Collector";* "com.bancoazul.t24colecturia.ColectorPEXMWS"
+    THIS.METHOD.CLT		= "getErrorMessage"
+    CALLJ.ARGUMENTS.CLT = CODIGO.ERROR
+    CALLJ.ERROR.SMS 	= " "
+    CALLJ.RESPONSE.CLT 	= " "
+;*LLAMADA AL METODO CALLJ 
+    CALL EB.CALLJ(THIS.PACKAGE.CLASS,THIS.METHOD.CLT,CALLJ.ARGUMENTS.CLT,CALLJ.RESPONSE.CLT,CALLJ.ERROR.CLT)
+    ERROR.DESCRIPTION = FIELD(CALLJ.RESPONSE.CLT,'|',3)
+    ;*ERROR.DESCRIPTION = CHANGE(CALLJ.RESPONSE.CLT,'"','')
+    
+    							TEXTO.ARCHIVO = ' + Error Descripcion >> ' : ERROR.DESCRIPTION 
+							    GOSUB ESCRIBIR.ARCHIVO
+RETURN
+
+ESCRIBIR.ARCHIVO:
+    DIR.NAME= 'COLECTORES'
+    R.ID   = 'CINTEX.PAGO.AUTH':TODAY:'.txt'
+;* hacer que escriba un archivo
+
+    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+    END
+    CLOSESEQ SEQ.PTR
+RETURN
+
+    END

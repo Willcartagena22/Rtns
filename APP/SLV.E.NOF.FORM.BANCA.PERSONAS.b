@@ -1,0 +1,411 @@
+*-----------------------------------------------------------------------------
+* <Rating>412</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.E.NOF.FORM.BANCA.PERSONAS(ENQ.DATA)
+*-----------------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+$INSERT I_COMMON
+$INSERT I_EQUATE
+$INSERT I_ENQUIRY.COMMON
+$INSERT I_F.CUSTOMER
+$INSERT I_F.ACCOUNT
+$INSERT I_F.EB.LOOKUP
+$INSERT I_F.COMPANY
+$INSERT I_F.EB.EXTERNAL.USER.DEVICE
+$INSERT I_F.AA.ARRANGEMENT
+$INSERT I_F.AA.PROTECTION.LIMIT
+$INSERT I_F.CUSTOMER.ACCOUNT
+$INSERT I_SLV.FORM.BANCA.PERSONAS.PDF.COMM
+$INSERT I_F.EB.SLV.GLOBAL.PARAM
+*-----------------------------------------------------------------------------
+
+GOSUB INI
+GOSUB OPENFILE
+GOSUB PROCESS
+RETURN
+
+INI:
+	FN.CUSTOMER 			= 'F.CUSTOMER'
+	F.CUSTOMER 				= ''
+	
+	FN.ACC 					= 'F.ACCOUNT'
+	F.ACC 					= ''
+	
+	FN.LOOKUP 				= 'F.EB.LOOKUP'
+	F.LOOKUP 				= ''
+	
+	FN.COMPANY 		 		= 'F.COMPANY'
+    F.COMPANY  		 		= ''
+    
+    FN.EXTRNL.USER.DEVICE 	= 'F.EB.EXTERNAL.USER.DEVICE'
+	F.EXTRNL.USER.DEVICE    = ''
+	
+	FN.ARR    				= 'F.AA.ARRANGEMENT'
+	F.ARR 					= ''
+	
+	FN.LIMIT                = 'F.AA.ARR.PROTECTION.LIMIT'
+	F.LIMIT					= ''
+	
+	FN.CUS.ACC 				= 'F.CUSTOMER.ACCOUNT'
+	F.CUS.ACC				= ''
+	
+	FN.TABLE.PA = 'F.EB.SLV.GLOBAL.PARAM'
+    F.TABLE.PA = ''
+    
+    
+    GOSUB DIRECTORY
+RETURN
+
+OPENFILE:
+ 	CALL OPF(FN.CUSTOMER, F.CUSTOMER)
+ 	CALL OPF(FN.ACC, F.ACC)
+ 	CALL OPF(FN.LOOKUP, F.LOOKUP)
+ 	CALL OPF(FN.COMPANY,F.COMPANY)
+ 	CALL OPF(FN.EXTRNL.USER.DEVICE, F.EXTRNL.USER.DEVICE)
+ 	CALL OPF(FN.ARR, F.ARR)
+ 	CALL OPF(FN.CUS.ACC, F.CUS.ACC)
+    CALL OPF(FN.TABLE.PA,F.TABLE.PA)
+    CALL OPF(FN.LIMIT, F.LIMIT)
+    
+ 	;*Seteo de varibles
+ 	V.CUSTOMER 		= ''
+ 	V.NAME      	= ''
+ 	V.ACCOUNT   	= ''
+ 	V.DUI       	= ''
+ 	V.PARAMETER 	= ''
+ 	V.FILTER 		= ''
+ 	
+ 	STMT.CUS    	= ''
+ 	V.SEARCH.ACC 	= ''
+ 	
+ 	NAME.ARCHIVE 	= ''
+ 	CLIENTE 		= ''
+ 	RUTA.PDF        = ''
+RETURN
+
+PROCESS:
+*** <region name= Obteniendo filtros>
+*** <desc> </desc>
+    
+    LOCATE "CUSTOMER" IN D.FIELDS<1> SETTING ACCT.POS THEN
+    	V.CUTOMER = D.RANGE.AND.VALUE<ACCT.POS>
+    	V.SEARCH.ACC = 'N'
+    END
+    
+    LOCATE "NAME" IN D.FIELDS<1> SETTING ACCT.POS THEN
+    	V.NAME = D.RANGE.AND.VALUE<ACCT.POS>
+    	V.SEARCH.ACC = 'N'
+    END
+    
+    LOCATE "DUI" IN D.FIELDS<1> SETTING ACCT.POS THEN
+    	V.DUI = D.RANGE.AND.VALUE<ACCT.POS>
+    	V.SEARCH.ACC = 'N'
+    END
+    
+    LOCATE "ACCOUNT" IN D.FIELDS<1> SETTING ACCT.POS THEN
+    	V.ACCOUNT = D.RANGE.AND.VALUE<ACCT.POS>
+    	V.SEARCH.ACC = 'S'
+    END
+    
+    V.CUSTOMER = 100119
+*** </region>
+
+*** <region name= Proceso de busqueda>
+*** <desc> </desc>
+;* Definiendo Filtros
+IF V.SEARCH.ACC EQ 'S' THEN
+  	IF V.ACCOUNT THEN
+     	STMT.ACC := "SELECT ":FN.ACC:" WITH @ID EQ ":V.ACCOUNT
+        CALL EB.READLIST (STMT.ACC, ID.ACC, '', N.REGS.ACC, ERR.ACC)
+        
+        CALL F.READ(FN.ACC, ID.ACC, RECORD.ACC, F.ACC, ERR.ACC)
+        V.CUSTOMER  = RECORD.ACC<AC.CUSTOMER>
+    END
+END
+ELSE    
+    STMT.CUS = "SELECT ":FN.CUSTOMER:" WITH @ID NE '' "
+    
+    IF V.CUSTOMER THEN
+    	V.FILTER := " AND @ID EQ ":V.CUSTOMER
+    END
+    
+    IF V.NAME THEN
+       V.FILTER := " AND LF.NOB.NIT EQ ":V.NAME
+    END
+    
+    IF V.DUI THEN
+    	V.FILTER := " AND LF.DUI EQ ":V.DUI
+    END 
+END   
+
+;*Generando Consulta 
+STMT.SEARH.CUS = STMT.CUS : V.FILTER
+CALL EB.READLIST (STMT.SEARH.CUS, CUS.ID, '', SELECTED, ERR.CUS)
+
+CALL F.READ(FN.CUSTOMER, CUS.ID, RECORD.CUS, F.CUSTOMER, ERR.CUS)
+
+APP = "CUSTOMER"
+LFS = "LF.NOB.NIT": VM : "LF.NIT"
+LFP = ""
+CALL MULTI.GET.LOC.REF(APP, LFS, LFP)
+
+LF.NOB.NIT = LFP<1,1>
+LF.NIT = LFP<1,2>
+
+V.NOMBRE.COMPLETO = RECORD.CUS<EB.CUS.LOCAL.REF><1, LF.NOB.NIT>
+
+V.TIPO.DOC		  	= RECORD.CUS<EB.CUS.LEGAL.DOC.NAME,1>
+CALL F.READ(FN.LOOKUP, 'CUS.LEGAL.DOC.NAME*':V.TIPO.DOC, RECORD.LOOKUP, F.LOOKUP, ERR.LOOKUP)
+V.DOC.NAME        	= RECORD.LOOKUP<EB.LU.DESCRIPTION,1>
+
+V.NUM.DOC         	= RECORD.CUS<EB.CUS.LEGAL.ID><1,1>
+V.NIT             	= RECORD.CUS<EB.CUS.LOCAL.REF><1, LF.NIT>
+V.EMAIL           	= RECORD.CUS<EB.CUS.EMAIL.1><1,1>
+V.MOVIL           	= RECORD.CUS<EB.CUS.PHONE.1><1,1>
+V.FECHA           	= OCONV(ICONV(TODAY,"D4"),"D4/E")
+V.CLIENTE         	= CUS.ID
+
+;*Agencia
+CALL F.READ(FN.COMPANY, ID.COMPANY, RS.COMPANY, F.COMPANY, ERR.COMPANY)
+V.NAME.AGENCIA 		= RS.COMPANY<EB.COM.COMPANY.NAME>
+
+STMT.EXTR.USR 		= "SELECT ":FN.EXTRNL.USER.DEVICE:" WITH USER.CUST.ID EQ ":CUS.ID
+CALL EB.READLIST (STMT.EXTR.USR, IDS.EXTR.USR, '', NO.REGS.EXTR.USR, ERR.EXTR.USR)
+
+CALL F.READ(FN.EXTRNL.USER.DEVICE, IDS.EXTR.USR<NO.REGS.EXTR.USR>, RECORD.EXTR.USR, F.EXTRNL.USER.DEVICE, ERR.EXTR.USR)
+V.DEVICE.TYPE 		= RECORD.EXTR.USR<EB.EXDEV.DEVICE.TYPE>
+V.NUM.SERIE 		= RECORD.EXTR.USR<EB.EXDEV.CODE.SERIE>
+V.USER.BANCA        = RECORD.EXTR.USR<EB.EXDEV.USER.ID>
+IF NOT(V.USER.BANCA) THEN
+	V.USER.BANCA = ' '
+END
+
+V.SOFT 		= ' '
+V.HARD 		= ' '
+V.SMS 		= ' '
+V.NUM.SERIE = ' '
+V.SMS 		= ' '
+
+IF V.DEVICE.TYPE EQ 'Soft Token' THEN
+ 	V.SOFT = 'X'
+END
+ELSE IF V.DEVICE.TYPE EQ 'Hard Token' THEN
+	V.HARD 	= 'X'
+END
+ELSE
+ 	V.SMS 	= 'X'
+END
+
+STMT.ARR = "SELECT ":FN.ARR" WITH PRODUCT.LINE EQ 'INTERNET.SERVICES' AND PRODUCT.GROUP EQ 'INTERNET.CLASS.OF.SERVICE' AND CUSTOMER EQ ":CUS.ID
+CALL EB.READLIST (STMT.ARR, IDS.ARR, '', SELECTED, SYSTEM.RETURN.CODE)
+
+CALL F.READ(FN.LIMIT, IDS.ARR<SELECTED>, RECORD.LIMIT, F.LIMIT, ERR.LIMIT)
+V.AMT.LIMIT =  RECORD.LIMIT<AA.PRCT.LIMIT.AMOUNT>
+IF NOT(V.AMT.LIMIT) THEN
+ 	V.AMT.LIMIT = ' '
+END
+
+CALL F.READ(FN.CUS.ACC, CUS.ID, RECORD.CUS.ACC, F.CUS.ACC, ERR.CUS.ACC)
+V.COUNT.ACC.ASOC = DCOUNT(RECORD.CUS.ACC,FM)
+
+;*Seteo de tablas dinamicas
+V.TBL.AHO  = ''
+V.TBL.CORR = ''
+V.TBL.PRES = ''
+V.TBL.DAP  = ''
+
+V.NUM.CORR 	= 1
+V.NUM.AHORR = 1
+V.NUM.DAP 	= 1
+V.NUM.PRES	= 1
+;*Recorriendo aplicacion de CUSTOMER.ACCOUNT para encontrar los productos activos que posee
+FOR V.CONTADOR = 1 TO V.COUNT.ACC.ASOC
+V.ARR = ''
+
+CALL F.READ(FN.ACC, RECORD.CUS.ACC<V.CONTADOR>, RECORD.ACC.TBL, F.ACC, ERR.ACC.TBL)
+V.ARR = RECORD.ACC.TBL<AC.ARRANGEMENT.ID>
+CRT V.ARR
+CALL F.READ(FN.ARR, V.ARR, RECORD.ARR, F.ARR, ERRO.ARR)
+V.PRODUCT.GROUP = RECORD.ARR<AA.ARR.PRODUCT.GROUP>
+V.PRODUCT.LINE  = RECORD.ARR<AA.ARR.PRODUCT.LINE>
+
+BEGIN CASE
+	CASE V.PRODUCT.GROUP EQ 'CUENTA.CORRIENTE.BANCO.AZUL'
+			V.TBL.CORR := 'TblCTE':V.NUM.CORR:'=':RECORD.CUS.ACC<V.CONTADOR>		:';' 
+			V.NUM.CORR = V.NUM.TBL.CORR + 1
+    CASE V.PRODUCT.GROUP EQ 'CUENTAS.AHORROS.BANCO.AZUL' 
+     		V.TBL.AHO  := 'TblAHO':V.NUM.AHORR:'=':RECORD.CUS.ACC<V.CONTADOR>		:';'
+     		V.NUM.AHORR = V.NUM.TBL.CORR + 1
+    CASE V.PRODUCT.GROUP EQ 'DEPOSITOS.BANCO.AZUL'
+    	 	V.TBL.DAP  := 'TblDAP':V.NUM.DAP:'=':RECORD.CUS.ACC<V.CONTADOR>			:';'
+    	 	V.NUM.DAP = V.NUM.TBL.CORR + 1
+    CASE V.PRODUCT.LINE EQ 'LENDING'
+    		V.TBL.PRES := 'TblPRE':V.NUM.PRES:'=':RECORD.CUS.ACC<V.CONTADOR>		:';'
+    		V.NUM.PRES = V.NUM.TBL.CORR + 1
+END CASE
+
+V.CONTADOR = V.CONTADOR + 1
+NEXT V.CONTADOR
+
+
+;*Armando el txt
+	;*DATOS  = ';'
+	DATOS := 'NombreCliente=':V.NOMBRE.COMPLETO:';'
+    DATOS := 'DocIdentidad=' :V.DOC.NAME:';'	
+	DATOS := 'NumDoc=' :V.NUM.DOC:';'
+	DATOS := 'UserBancAzul=':V.USER.BANCA:';'
+	DATOS := 'Nit=':V.NIT :';'
+	DATOS := 'Email=':V.EMAIL:';'
+	DATOS := 'Movil=':V.MOVIL:';'
+	DATOS := 'Fecha=':V.FECHA:';'
+	DATOS := 'Cliente=':V.CLIENTE:';'
+	DATOS := 'Agencia=':V.NAME.AGENCIA:';'
+	
+	DATOS := 'HardToken=':V.HARD:';'
+	DATOS := 'SoftToken=':V.SOFT:';'
+	DATOS := 'NumeSerie=':V.NUM.SERIE:';'
+	DATOS := 'smsToken=':V.SMS:';'
+	DATOS := 'limiteTrans=':V.AMT.LIMIT:';'
+	IF NOT(V.TBL.AHO) THEN
+		DATOS := 'TblAHO1= ':';'
+	END
+	ELSE
+		DATOS := V.TBL.AHO
+	END
+	IF NOT(V.TBL.CORR) THEN
+		DATOS := 'TblCTE1= ':';'
+	END
+	ELSE
+		DATOS := V.TBL.CORR
+	END
+	IF NOT(V.TBL.PRES) THEN
+		DATOS := 'TblPRE1= ':';'
+	END
+	ELSE
+		DATOS := V.TBL.PRES
+	END
+	IF NOT(V.TBL.DAP) THEN
+		DATOS := 'TblDAP1= ':';'
+	END
+	ELSE
+		DATOS := V.TBL.DAP
+	END
+	CRT DATOS
+	GOSUB PROCESS.PERFIL
+	
+RETURN
+
+
+DIRECTORY:
+	RUTA.SPOOL.ID = 'RUTA.SPOOL.FILES'
+	CALL F.READ(FN.TABLE.PA, RUTA.SPOOL.ID, R.TABLE.PA, F.TABLE.PA, F.ERR.PA)
+	DIR.NAME.SPOOL = R.TABLE.PA<EB.SLV39.VALOR.PARAM> ;* ./SPOOL.FILES/
+	CRT 'DIR.NAME.SPOOL>>':DIR.NAME.SPOOL
+
+	RUTA.PDF.ID = 'RUTA.CONTRATO.PDF'
+	CALL F.READ(FN.TABLE.PA, RUTA.PDF.ID, R.TABLE.PA, F.TABLE.PA, F.ERR.PA)
+	DIR.NAME.PDF = R.TABLE.PA<EB.SLV39.VALOR.PARAM>   ;* http://192.168.1.92/PDF/
+	CRT 'DIR.NAME.PDF>>':DIR.NAME.PDF
+	
+	CALL F.READ(FN.TABLE.PA, 'RUTA.VALIDAR.PDF', R.PARAM, F.TABLE.PA, F.ERR.PA)
+	
+RETURN
+
+PROCESS.PERFIL:
+*-----------------------------------------------------------------------------
+    NAME.ID = 'FormUserBancAzulPersonas':'-':CUS.ID:'-':TODAY
+    
+    R.ID.SPOOL = NAME.ID : '.txt'
+    R.ID.TXT   = NAME.ID : '.txt'
+    R.ID.PDF   = NAME.ID : '.pdf'
+	FILE.PATH = R.PARAM<EB.SLV39.VALOR.PARAM> : R.ID.PDF
+	;* Codificar caracteres especiales
+	DATOS = CHANGE(DATOS, 'Ñ', CHAR(465))
+	DATOS = CHANGE(DATOS, 'ñ', CHAR(497))
+	
+	;*CRT "Ñ - ":CHAR(465)
+
+    ;* tratamiento de letras tildadas o semejantes
+	DATOS = CHANGE(DATOS, CHAR(193), 'A')
+	DATOS = CHANGE(DATOS, CHAR(201), 'E')
+	DATOS = CHANGE(DATOS, CHAR(205), 'I')
+	DATOS = CHANGE(DATOS, CHAR(211), 'O')
+	DATOS = CHANGE(DATOS, CHAR(218), 'U')
+	DATOS = CHANGE(DATOS, CHAR(192), 'A')
+	DATOS = CHANGE(DATOS, CHAR(200), 'E')
+	DATOS = CHANGE(DATOS, CHAR(204), 'I')
+	DATOS = CHANGE(DATOS, CHAR(210), 'O')
+	DATOS = CHANGE(DATOS, CHAR(217), 'U')
+	DATOS = CHANGE(DATOS, CHAR(220), 'U')
+	DATOS = CHANGE(DATOS, CHAR(219), 'U')
+	DATOS = CHANGE(DATOS, CHAR(214), 'O')
+	DATOS = CHANGE(DATOS, CHAR(212), 'O')
+	DATOS = CHANGE(DATOS, CHAR(207), 'I')
+	DATOS = CHANGE(DATOS, CHAR(206), 'I') 
+	DATOS = CHANGE(DATOS, CHAR(203), 'E')
+
+	DATOS = CHANGE(DATOS, CHAR(225), 'A')
+	DATOS = CHANGE(DATOS, CHAR(233), 'E')
+	DATOS = CHANGE(DATOS, CHAR(237), 'I')
+	DATOS = CHANGE(DATOS, CHAR(243), 'O')
+	DATOS = CHANGE(DATOS, CHAR(250), 'U')
+	
+	DATOS = CHANGE(DATOS, '=;', '= ;')
+	
+	;* Creando el archivo principal    
+    OPENSEQ DIR.NAME.SPOOL, R.ID.SPOOL TO SEQ.PTR 
+   	ELSE
+        CREATE SEQ.PTR 
+        ELSE
+          	ETEXT = 'No se puede crear el archivo, carpeta no encontrada'
+      		CALL STORE.END.ERROR
+   		END
+	END
+
+	;* Escribiendo la cadena en el archivo principal
+	;*----------------------------------------------
+	WRITESEQ DATOS ON SEQ.PTR 
+	ELSE
+		ETEXT = 'No se pueden escribir los datos en el archivo.'
+		CALL STORE.END.ERROR
+	END
+
+	;* Cerrando el archivo
+	;*--------------------
+	CLOSESEQ SEQ.PTR
+	
+	
+***********************************************************************    
+	CLIENTE = CUS.ID
+	RUTA.PDF = DIR.NAME.PDF : R.ID.PDF
+    
+    ;* Buscando si el archivo principal existe 
+    OPENPATH FILE.PATH TO PATH.FILE THEN
+    	
+	    STR.MOV = ''
+		STR.MOV := CLIENTE 		: "*"	;* 1
+		STR.MOV := RUTA.PDF		: "*"	;* 2
+		ENQ.DATA<-1> = STR.MOV
+	END
+	ELSE
+		STR.MOV = ''
+		STR.MOV := CLIENTE 		: "*"	;* 1
+		STR.MOV := 'En espera que se genera archivo PDF'		: "*"	;* 2
+		ENQ.DATA<-1> = STR.MOV
+	END
+	CLOSESEQ SEQ.PTR
+	;*STR.MOV = ''
+	;*STR.MOV := CLIENTE 		: "*"	;* 1
+	;*STR.MOV := RUTA.PDF		: "*"	;* 2
+	;*ENQ.DATA<-1> = STR.MOV 
+***********************************************************************
+		
+   Y.TASK = 'ENQ SLV.E.PDF.FORM.BANCA.PERSONAS PARAMETER EQ ': 1
+   CALL EB.SET.NEW.TASK(Y.TASK)
+	
+RETURN
+END
+

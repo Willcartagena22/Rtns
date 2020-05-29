@@ -1,0 +1,57 @@
+*-----------------------------------------------------------------------------
+* <Rating>-34</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.UTIL.IMP.P.GET.IP(ARRANGEMENT)
+*-----------------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+$INSERT I_COMMON
+$INSERT I_EQUATE
+$INSERT I_F.AA.ARRANGEMENT
+$INSERT I_F.AA.INTEREST
+$INSERT I_F.AA.INTEREST.ACCRUALS
+*-----------------------------------------------------------------------------
+    GOSUB INIT
+    GOSUB OPENFILES
+    GOSUB PROCESS
+    RETURN
+*-----------------------------------------------------------------------------
+
+INIT:
+	;*obtener fecha de inicio de acuerdo
+    ID.ARR = ARRANGEMENT
+    FN.ARRANGEMENT 			= 'F.AA.ARRANGEMENT'
+    F.ARRANGEMENT			= ''
+    FN.AA.INTEREST.ACCRUALS	= 'F.AA.INTEREST.ACCRUALS'
+ 	F.AA.INTEREST.ACCRUALS  = ''
+    ER.ARR=''
+RETURN
+
+OPENFILES:
+*    IF(PUTENV("OFS_SOURCE=GCS")) THEN
+*    CRT "OK+++"
+*    END
+    CALL SLV.UTIL.GET.ARR.X.ACC(ARRANGEMENT)    
+    CALL OPF(FN.ARRANGEMENT, F.ARRANGEMENT)
+    CALL OPF(FN.AA.INTEREST.ACCRUALS,F.AA.INTEREST.ACCRUALS)
+RETURN
+
+PROCESS:
+*-----------------------------------------------------------------------------
+    CALL F.READ(FN.ARRANGEMENT,ARRANGEMENT,R.ARRANGEMENT,F.ARRANGEMENT,ER.ARR)
+    FECHA.INICIO = R.ARRANGEMENT<AA.ARR.START.DATE>
+*-----------------------------------------------------------------------------
+	;*obtener monto de prestamo
+    REC.INTEREST = ''
+    INTEREST.ERROR = ''
+    CALL AA.GET.ARRANGEMENT.CONDITIONS(ARRANGEMENT,'INTEREST','PRINCIPALINT',TODAY,INTEREST.ID, REC.INTEREST,INTEREST.ERROR)
+    Y.REC.INTEREST = RAISE(REC.INTEREST)
+    INTERESMORA = Y.REC.INTEREST<AA.INT.EFFECTIVE.RATE>
+*    CRT 'INTERESMORA ':INTERESMORA
+*-----------------------------------------------------------------------------
+    ARRANGEMENT = INTERESMORA:"%"    
+RETURN
+
+END

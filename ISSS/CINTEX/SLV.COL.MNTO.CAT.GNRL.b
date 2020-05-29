@@ -1,0 +1,93 @@
+*-----------------------------------------------------------------------------
+* <Rating>-46</Rating>
+*-----------------------------------------------------------------------------
+    SUBROUTINE SLV.COL.MNTO.CAT.GNRL
+*-----------------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_EQUATE
+    $INSERT I_F.EB.SLV.COL.MNTO.CATALOG
+*-----------------------------------------------------------------------------
+
+    GOSUB INIT
+    GOSUB OPEN.FILE
+    GOSUB PROCCESS
+    RETURN
+
+INIT:
+    FN.MNTO.CATALOG	= 'F.EB.SLV.COL.MNTO.CATALOG'
+    F.MNTO.CATALOG	= ''
+    RETURN
+
+OPEN.FILE:
+    CALL OPF(FN.MNTO.CATALOG, F.MNTO.CATALOG)
+    RETURN
+
+PROCCESS:
+    ;*ID.CATALOGO = R.NEW(EB.SLV67.ID.CATALOGO)
+	ID.CATALOGO = FIELD(COMI,'-',1)
+    
+    TEXTO.ARCHIVO = 'ID.CATALOGO >':ID
+    GOSUB ESCRIBIR.ARCHIVO
+
+    THIS.PACKAGE.CLASS ="com.bancoazul.collector.Collector";* "com.bancoazul.t24colecturia.ColectorPEXMWS"
+    THIS.METHOD.CLT= "getCatalog"
+    CALLJ.ARGUMENTS.CLT = ID.CATALOGO
+    CALLJ.ERROR.SMS = " "
+    CALLJ.RESPONSE.CLT = " "
+
+;*LLAMADA AL METODO CALLJ
+    CALL EB.CALLJ(THIS.PACKAGE.CLASS,THIS.METHOD.CLT,CALLJ.ARGUMENTS.CLT,CALLJ.RESPONSE.CLT,CALLJ.ERROR.CLT)
+
+    CAMPOS.MULTIVALOR.X3 = CALLJ.RESPONSE.CLT
+    TRAMA.MULTIVALOR.X3 = CHANGE(CAMPOS.MULTIVALOR.X3,'|',VM)
+    CANTIDAD.REGISTROS.MULTIVALOR.X3 = DCOUNT(TRAMA.MULTIVALOR.X3,VM) - 2 ;* COMILLAS DE INICIO Y FINAL
+
+;*CRT TRAMA.MULTIVALOR.X3
+
+;*NOMBRE DEL CATALOGO
+    SEGMENTO.X3 = FIELD(TRAMA.MULTIVALOR.X3,VM,2)
+    NOMBRE.CATALOGO = FIELD(SEGMENTO.X3,'~',1)
+    R.NEW(EB.SLV67.NOMBRE.CATALOGO) = NOMBRE.CATALOGO
+
+    CRT NOMBRE.CATALOGO
+    FOR H = 2 TO CANTIDAD.REGISTROS.MULTIVALOR.X3
+        SEGMENTO.X3 = FIELD(TRAMA.MULTIVALOR.X3,VM,H+1)
+        VALOR.CODIGO = FIELD(SEGMENTO.X3,'~',1)
+        VALOR.DESCRIPCION = FIELD(SEGMENTO.X3,'~',2)
+        VALOR.ESTATUS = FIELD(SEGMENTO.X3,'~',3)
+
+        IF H EQ 2 THEN
+            R.NEW(EB.SLV67.CODIGO.ITEM) =  VALOR.CODIGO
+            R.NEW(EB.SLV67.VALOR.ITEM) =  VALOR.DESCRIPCION
+            R.NEW(EB.SLV67.ESTATUS.ITEM) =  VALOR.ESTATUS
+        END
+        ELSE
+        R.NEW(EB.SLV67.CODIGO.ITEM) := VM: VALOR.CODIGO
+        R.NEW(EB.SLV67.VALOR.ITEM) := VM: VALOR.DESCRIPCION
+        R.NEW(EB.SLV67.ESTATUS.ITEM) := VM: VALOR.ESTATUS
+    END
+
+    ;*TEXTO.ARCHIVO = ID.CATALOGO:'~':NOMBRE.CATALOGO:'~':VALOR.CODIGO:'~':VALOR.DESCRIPCION:'~':VALOR.ESTATUS
+    ;*GOSUB ESCRIBIR.ARCHIVO
+    NEXT H
+
+    RETURN
+
+
+ESCRIBIR.ARCHIVO:
+    DIR.NAME= 'COLECTORES'
+    R.ID = 'MNTO.CATALOG.':TODAY:'.txt'
+;* hacer que escriba un archivo
+
+    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+    END
+
+    CLOSESEQ SEQ.PTR
+    RETURN
+
+    END

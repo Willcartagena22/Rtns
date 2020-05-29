@@ -1,0 +1,71 @@
+*-----------------------------------------------------------------------------
+* <Rating>-38</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.AML.CUENTA.SIMP
+*-----------------------------------------------------------------------------
+* Modification History :
+
+$INSERT I_COMMON 
+$INSERT I_EQUATE
+*$INSERT I_F.EB.SLV.AML.CUSTOMER.SIMP
+*$INSERT I_F.CUSTOMER
+
+
+*-----------------------------------------------------------------------------
+    GOSUB INIT
+    GOSUB CONSULTAR
+*    GOSUB PROCESS
+    
+    RETURN
+
+INIT:
+    FN.TABLE.PA = 'F.EB.SLV.GLOBAL.PARAM'
+    F.TABLE.PA = ''
+    FN.CUS				='F.CUSTOMER'
+    F.CUS				=''
+	FN.AML='F.EB.SLV.AML.CUSTOMER.SIMP'
+	F.AML=''
+    CALL OPF(FN.TABLE.PA, F.TABLE.PA)
+    CALL OPF(FN.CUS, F.CUS)
+    CALL OPF(FN.AML, F.AML)
+RETURN
+
+CONSULTAR:
+	FECHA=TODAY
+	TEXTO.ARCHIVO='FECHA : ':FECHA
+    GOSUB ESCRIBIR.ARCHIVO
+*SELECT.CUST = "SELECT ": FN.AML:" WITH DATE.C EQ '": FECHA:"' AND PROCESSING EQ 'NO'"
+*CALL EB.READLIST(SELECT.CUST, LIST.CUST, '', NO.OF.CUST, ERR.CUST)
+
+RETURN
+
+*PROCESS:
+*
+*
+*IF LIST.CUST THEN
+*    FOR I = 1 TO NO.OF.CUST
+*	CUSTOMER=LIST.CUST<I>	
+*	OFS.CUST='CUSTOMER,SLV.AML.CS/I/PROCESS//0,/,':CUSTOMER:',CUSTOMER.CURRENCY:1:1=USD,LANGUAGE:1:1=2,LF.EXE.TAX:1:1=NO'
+*	Y.OPTIONS='SLVOFSPS'
+*	
+*	TEXTO.ARCHIVO='OFS.CUST : ':OFS.CUST
+*    GOSUB ESCRIBIR.ARCHIVO
+*    CALL OFS.POST.MESSAGE(OFS.CUST,Y.RESPONSE,Y.OPTIONS,TXN.RESULT)
+*    TEXTO.ARCHIVO='Y.RESPONSE : ':Y.RESPONSE:'TXN.RESULT':TXN.RESULT
+*    GOSUB ESCRIBIR.ARCHIVO
+*	NEXT
+*END
+
+RETURN
+
+ESCRIBIR.ARCHIVO:
+	    DIR.NAME= 'MHLogs'
+	    R.ID   = 'Simplificada.txt'
+	    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+	    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+	    END
+	    CLOSESEQ SEQ.PTR
+    RETURN
+
+
+END

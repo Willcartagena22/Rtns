@@ -1,0 +1,85 @@
+    COMMON/AAAAP/AA$PROPERTY.CLASS.ID,  ;* Property class ID of current property
+    AA$PROPERTY.CLASS.REC,    ;* Property class record of current property
+    AA$PRODUCT.ARR, ;* Flag to indicate if we are processing PROD or ARRangement level
+    AA$RULE.TYPE,   ;* Array of rule types associated with each field
+    AA$MAND,        ;* Mandatory indicator P (Mand Prod), A (Mand Arr) and negotiable opt
+    AA$FIELD.ACTIVITY,        ;* Field activities allowed
+    AA$FIELD.DATA.TYPE,       ;* Array of field types associated with each field
+    AA$DATED.ID,    ;* Property Id is dated
+    AA$CCY.ID,      ;* Property Id contains Ccy
+    AA$OPT.CCY.ID,  ;* Property Id can be without Currency, this is valid for charge property alone
+    AA$MULTI.PROPERTY,        ;* Multiple Properties allowed per product
+    AA$CUST.ID,     ;* Customer level id
+    AA$ARR.ID,      ;* Arrangement Id
+    AA$R.ARRANGEMENT,         ;* Main Arrangement Record
+    AA$PROP.EFF.DATE,         ;* The effective of the current property being processed
+    AA$PROPERTY.ID, ;* Current property
+    AA$PREV.PROD.PROP.REC,    ;* Stores the previous product property record during CHANGE.PRODUCT activity
+    AA$OVERRIDE.LIST,         ;* Default field override list
+    AA$ARR.LINK.TYPE,         ;* Link between arrangement and product property
+    AA$ARR.PRODUCT.ID,        ;* Stores the Product used by the arrangement
+    AA$ARR.CURRENCY,          ;* Stores the Currency used by the arrangement
+    AA$ARR.CHANGED.FIELDS,    ;* Stores the list of changed fields on an arrangement property record
+   	AA$ORIGINAL.FUNCTION,     ;* During authorisation and deletion this common will store the record function from activity manager.
+    AA$PRODUCT.RECORD,        ;* Stores the published Product record for the arrangement
+    AA$PROD.PROP.RECORD,      ;* Stores the Published product property for the arrangement
+    AA$ARR.PC.ID,   ;* Full property class id
+    AA$ACTIVITY.ID, ;* Activity id, loaded in the property templates
+    AA$ACTIVITY.EFF.DATE,     ;* Activity Effective date, loaded in the property templates
+    AA$ARRANGEMENT.STATUS,    ;* Arrangement status record
+    AA$TXN.REFERENCE,         ;* Arrangement Activity transaction reference - for accounting entries, etc
+    AA$CURR.ACTION, ;* Current action being processed by Action manager
+    AA$R.ARRANGEMENT.ACTIVITY,          ;* Current Arrangement Activity record
+    AA$XREF.ID.REQD,          ;* If Xref Id is required, flag this
+    AA$LOCAL.REF.LIST,        ;* Local Reference items
+    AA$ASSOC,       ;* AA association for a field
+    AA$F, ;* AA F array
+    AA$FNO,         ;* AA Field number for array
+    AA$N, ;* N Array
+    AA$T, ;* T Array
+    AA$CHECKFILE,   ;* CHECKFILE array
+    AA$RULE.TYPE,   ;* Rules allowed for the field
+    AA$ACTIVITY,    ;* Activity allowed for field
+    AA$CURR.ACTIVITY,         ;* User/System generated activities
+    AA$LINKED.ACCOUNT,        ;* Linked Account ID
+    AA$NEW.ARRANGEMENT,       ;* Flag to indicate if the current activity is a new arrangement activity
+    AA$PREV.PROP.REC,         ;* Stores the previous version of current property record
+    AA$PROPERTY.CLASS.LIST,   ;* List of properties and its property classes for the arrangement
+    AA$RENEWAL.ACTIVITY,      ;* Flag to indicate if the current activity is a Renewal Activity.
+    AA$PROPERTY.NEW,          ;* Holds the New Records of the properties executed in the current activity
+    AA$PROPERTY.OLD,          ;* Holds the Old Records of the properties executed in the current activity
+    AA$MASTER.ACTIVITY,       ;* It contains Master Activity ID and name (Seperated by VM), that is, topmost activity
+    AA$SOURCE.DETAILS,        ;* To Hold Property, Source Type & Balance(s) for an arrangement to reuse. 1 - Arrangement Id; 2 - Property Name; 3 - Source Type; 4 - Calc Type; 5- Source Balance(s) Name; 6-Term Amt property; 7-Account property
+    AA$RESTORE.ARRANGEMENT,   ;* Flag to indicate if the current activity is account restoration activity.
+    AA$PREV.RECORD, ;* stores the previous record
+    AA$ACCR.DETS   ;* <1> contains Interest properties & <2> their corresponding last accrued date
+
+    OPTION.LIST = ''
+    REQUIRED.OPTION = ''
+    DEFFUN OPTION.SELECTED(OPTION.LIST, REQUIRED.OPTION)
+
+    EQU AA$SEP TO "-"         ;* Id separator in the applications
+    EQU AA$OVE.SEP TO "|"     ;* Convert delimeters in override and error from this
+    EQU AA$ARRANGEMENT TO 1   ;* Arrangement level
+    EQU AA$PRODUCT TO 2       ;* Product designer level
+    EQU AA$PUBLISH TO 3       ;* Product publisher level
+    EQU AA$PROOF TO 4         ;* Product proofing level
+    EQU AA$APPROVAL TO 5      ;* Arrangement approval level
+    EQU AA$DESIGNER TO 6      ;* The actual product.designer (currently, we need this only to write out to the dated.xref)
+    EQU AA$SIMULATION TO 7    ;* Simulation level
+
+    EQU AA$STAGE TO 1         ;* Position where we specify the stage of the file that we require, possible values - AA$PRODUCT, AA$PROOF, AA$PUBLISH, AA$ARRANGEMENT
+    EQU AA$PROP.CLASS TO 2    ;* Position where we specify the property class - AA$PROPERTY.CLASS.ID
+    EQU AA$STD.START.FLD.POS TO 3       ;* Stores the actual start field position common to Pr
+
+
+    EQU AA$ACTIVITY TO 1      ;* Activity field position in the property class templates
+    EQU AA$ACTION TO 2        ;* Action field position in the property class templates
+
+    EQU AA$ACT.PRODUCT.LINE TO 1        ;* Product line position in the Activity id
+    EQU AA$ACT.ACTIVITY TO 2  ;* Activity position in the Activity id
+    EQU AA$ACT.OBJECT TO 3    ;* Object - Property class or Arrangement position in the Activity id
+
+    EQU AA$PROPERTY.POS TO 1  ;* Property position
+    EQU AA$PROPERTY.CLASS.POS TO 2      ;* Property class position
+

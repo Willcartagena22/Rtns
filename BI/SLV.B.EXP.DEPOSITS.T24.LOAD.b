@@ -1,0 +1,245 @@
+*-----------------------------------------------------------------------------
+* <Rating>48</Rating>
+*----------------------------------------------------------------------------------------------------
+* Nombre: SLV.B.EXP.DEPOSITS.T24.LOAD.b
+* Descripcion: Rutina encargada de generar archivo .csv con informacion de Arrangemente de Depositos y Cuentas de
+*				 T24 , para volcado de data a SIC
+*----------------------------------------------------------------------------------------------------
+* Version	    Autor		 Fecha			Comentario
+*----------------------------------------------------------------------------------------------------
+* 1.0		MMenjivar		29.06.2017		Version inicial
+*-----------------------------------------------------------------------------------------------------
+
+SUBROUTINE SLV.B.EXP.DEPOSITS.T24.LOAD
+  
+$INSERT I_COMMON 
+$INSERT I_EQUATE    
+$INSERT I_F.AA.ARRANGEMENT.ACTIVITY  
+$INSERT I_F.AA.ACTIVITY.HISTORY 
+$INSERT I_AA.LOCAL.COMMON     
+$INSERT I_F.ACCOUNT         
+$INSERT I_F.AA.ACCOUNT 
+$INSERT I_F.AA.ACCOUNT.DETAILS
+$INSERT I_AA.APP.COMMON	
+$INSERT I_F.AA.ARRANGEMENT   
+$INSERT I_F.AA.ACCOUNT
+$INSERT I_F.AA.INTEREST    
+$INSERT I_F.AA.SETTLEMENT
+$INSERT I_F.AA.PRODUCT
+$INSERT I_F.AA.TERM.AMOUNT 
+$INSERT I_F.AA.CHANGE.PRODUCT    
+$INSERT I_F.AA.ACCOUNT.DETAILS
+$INSERT I_F.AA.SETTLEMENT 
+$INSERT I_F.AA.PAYMENT.SCHEDULE
+$INSERT I_F.CUSTOMER
+$INSERT I_F.AA.CUSTOMER 
+$INSERT I_F.EB.LOOKUP
+$INSERT I_F.AA.INTEREST.ACCRUALS
+$INSERT I_F.SLV.REGULATORY.INFO
+$INSERT I_F.AA.BILL.DETAILS 
+$INSERT I_F.SLV.LOAN.STATUS
+$INSERT I_F.SLV.COND.ASSET
+$INSERT I_F.EB.CONTRACT.BALANCES
+$INSERT I_F.AA.SCHEDULED.ACTIVITY
+$INSERT I_F.AA.ACTIVITY.BALANCES 
+$INSERT I_F.SLV.AA.ACT.REVE.BAL.DET
+$INSERT I_SLV.E.LOAN.COMMON
+$INSERT I_F.FUNDS.TRANSFER
+$INSERT I_F.DATES 
+$INSERT I_F.AA.ACCOUNT.CLOSURE.DETAILS
+$INSERT I_F.AA.CHARGE
+$INSERT I_F.AA.TAX
+$INSERT I_SLV.B.EXP.DEPOSITS.T24.COMMON
+$INSERT I_F.SLV.RET.ISR.AVERAGE.BALANCE
+$INSERT I_F.DEPT.ACCT.OFFICER
+$INSERT I_F.EB.SLV.DAILY.ARR.DATA
+*-----------------------------------------------------------------------------
+GOSUB INIT
+GOSUB OPENFILE
+RETURN
+*-----------------------------------------------------------------------------
+INIT:
+
+    ;*Definicion de variables
+	DIR.NAME			= 'SICTemp'  
+	DIR.NAME.BUP		= 'SICBUP'
+	
+    NAME.FILE 			= ''    
+    ARRAY.ID.ARRAG 		= '' 		;*para guardar arreglo de ids
+    DATE.TODAY			= TODAY		;*YYYYMMDD 
+    
+    ;*Fecha y hora del servidor Ejm: 20161206 09:26:42.000
+    FECHAYHORA			= TIMEDATE()
+	HORA 				= FECHAYHORA[1,8]:'.000'
+	D_DATENOW			= OCONV(DATE(),'D')
+	D_DATENOW 			= OCONV(ICONV(D_DATENOW,"DMDY"),"D-E[2,A3,2]")
+	UsLocGetDate		= D_DATENOW[7,4]:D_DATENOW[4,2]:D_DATENOW[1,2]:' ':HORA
+		     
+	;*Product Line
+	Y.ACCOUNTS 			= 'ACCOUNTS' 
+	Y.DEPOSITS			= 'DEPOSITS'
+	Y.LENDING 			= 'LENDING' 
+	MESES 				= 3
+	PROP.PAY 			= 'PAYMENT'	
+	PROP.TAX 			= 'CRINTEREST-TAX'
+	PROP.TAX.DEP 		= 'DEPOSITINT-TAX'
+	PROP.BD 			= 'DEPOSITINT'
+	PROP.ACTINT 		= 'CRINTEREST'    
+    PROP.DEPINT 		= 'DEPOSITINT'
+	PROP.ACCDEPIN   	= 'ACCDEPOSITINT'
+	PROP.ACCCRINT   	= 'ACCCRINTEREST'
+	
+	;*Variables para arreglo de datos
+	STR.ARR   			= ''
+	STR.BLANK 			= ''
+	;*Arreglo para guardar toda la data consultada  
+	ARRAY.DATA 			= ''
+	J 					= 0	
+	;*Separador de linea
+    EndLine 			= '|'
+    V.REFERENCIA 		= ''    	
+    ULTIMO.PAGO 		= 0.00
+    MY.BILL.ID  		= ""
+    N.TOT.PENALTYINT 	= 0.00
+    L.COMPANY 			= ''
+    STR.GRACE 			= ''
+    S.ARR3 				= ''
+	N.GRACE.K 			= 0
+	N.GRACE.I 			= 0 
+	N.INT.VENCIDO 		= 0
+	CrdPenaltyIntAcc 	= 0.0  
+	Y.COD.DTS 			= 'SV0010001-COB'	
+	Y.COMPANY			= 'SV0010001'
+	
+	
+	
+
+RETURN
+
+
+
+OPENFILE:
+
+	FN.ARRANGEMENT		= 'FBNK.AA.ARRANGEMENT'
+    F.ARRANGEMENT 		= ''
+    CALL OPF(FN.ARRANGEMENT, F.ARRANGEMENT)
+    
+    FN.ARR.ACT.HIS		= 'F.AA.ACTIVITY.HISTORY'
+    F.ARR.ACT.HIS		= ''
+    CALL OPF(FN.ARR.ACT.HIS, F.ARR.ACT.HIS)
+    	 
+	FN.ARR.INTEREST 	= 'FBNK.AA.ARR.INTEREST'
+  	F.ARR.INTEREST 		= '' 
+	CALL OPF(FN.ARR.INTEREST, F.ARR.INTEREST)
+	
+	FN.ARR.TERM.AMO 	= 'FBNK.AA.ARR.TERM.AMOUNT'
+    F.ARR.TERM.AMO  	= ''
+    CALL OPF(FN.ARR.TERM.AMO , F.ARR.TERM.AMO)
+    
+	FN.ACC.DET 			= 'FBNK.AA.ACCOUNT.DETAILS'
+    F.ACC.DET  			= ''
+    CALL OPF(FN.ACC.DET, F.ACC.DET)
+    
+    FN.ACC 				= 'FBNK.ACCOUNT'
+    F.ACC  				= ''
+    CALL OPF(FN.ACC, F.ACC) 
+    
+    FN.ACC.HIS			= 'FBNK.ACCOUNT$HIS'
+    F.ACC.HIS			= ''
+    CALL OPF(FN.ACC.HIS,F.ACC.HIS)
+    
+    FN.AA.ACCOUNT		= 'FBNK.AA.ACCOUNT'
+    F.AA.ACCOUNT		= ''
+    CALL OPF(FN.AA.ACCOUNT,F.AA.ACCOUNT)
+    
+    FN.CUSTOMER			= 'FBNK.CUSTOMER'
+    F.CUSTOMER			= ''
+    CALL OPF(FN.CUSTOMER, F.CUSTOMER)
+    
+	FN.PAYMENT.SCHEDULE = 'FBNK.AA.PAYMENT.SCHEDULE'
+ 	F.PAYMENT.SCHEDULE  = ''
+ 	
+ 	FN.EBLOOKUP			= 'F.EB.LOOKUP'
+ 	F.EBLOOKUP			= ''
+ 	CALL OPF(FN.EBLOOKUP, F.EBLOOKUP)
+ 	
+ 	FN.INTEREST.ACCRU	= 'F.AA.INTEREST.ACCRUALS'
+ 	F.INTEREST.ACCRU	= ''
+ 	CALL OPF(FN.INTEREST.ACCRU, F.INTEREST.ACCRU)
+ 	
+ 	FN.REGUL.INFO       = 'FBNK.SLV.REGULATORY.INFO'
+	F.REGUL.INFO        = ''
+	CALL OPF(FN.REGUL.INFO, F.REGUL.INFO)
+
+    FN.BILL.DET         = 'F.AA.BILL.DETAILS'
+    F.BILL.DET 			= ''
+    CALL OPF(FN.BILL.DET, F.BILL.DET)
+ 
+    FN.LOAN.STATUS 		= 'F.SLV.LOAN.STATUS'
+    F.LOAN.STATUS  		= ''
+    CALL OPF(FN.LOAN.STATUS, F.LOAN.STATUS)
+
+    FN.COND.ASSET 		= 'F.SLV.COND.ASSET'
+    F.COND.ASSET  		= ''
+    CALL OPF(FN.COND.ASSET, F.COND.ASSET)
+    
+	FN.ECB 				= 'FBNK.EB.CONTRACT.BALANCES'
+	F.ECB 				= ''
+	CALL OPF(FN.ECB, F.ECB)
+
+    FN.SCHE.ACT 		= 'F.AA.SCHEDULED.ACTIVITY'
+    F.SCHE.ACT 			= ''
+    CALL OPF(FN.SCHE.ACT, F.SCHE.ACT)
+
+    FN.ACT.BALC 		= 'F.AA.ACTIVITY.BALANCES'
+    F.ACT.BALC  		= ''
+    CALL OPF(FN.ACT.BALC, F.ACT.BALC) 
+
+    FN.ARR.ACT.NAU 		= 'F.AA.ARRANGEMENT.ACTIVITY$NAU'
+    F.ARR.ACT.NAU  		= ''
+    CALL OPF(FN.ARR.ACT.NAU, F.ARR.ACT.NAU)
+ 
+    FN.ARR.ACT 			= 'F.AA.ARRANGEMENT.ACTIVITY'
+    F.ARR.ACT  			= ''
+    CALL OPF(FN.ARR.ACT, F.ARR.ACT)
+
+    FN.DATES 			= 'F.DATES'
+    F.DATES  			= '' 
+    CALL OPF(FN.DATES, F.DATES)
+    
+    FN.CLOSE.DET 		= 'F.AA.ACCOUNT.CLOSURE.DETAILS'
+    F.CLOSE.DET  		= ''
+    CALL OPF(FN.CLOSE.DET, F.CLOSE.DET)    
+    
+    FN.DEPGAR			= 'F.SLV.DEPGAR.PARAM'
+	F.DEPGAR			= ''
+	CALL OPF(FN.DEPGAR, F.DEPGAR)
+	
+	FN.CHARGE			= 'F.AA.ARR.CHARGE'
+    F.CHARGE 			= ''
+    CALL OPF(FN.CHARGE, F.CHARGE)    
+    
+    FN.RET.ISR.AVE		= 'F.SLV.RET.ISR.AVERAGE.BALANCE'
+	F.RET.ISR.AVE		= ''
+	
+    CALL OPF(FN.RET.ISR.AVE, F.RET.ISR.AVE)    
+    
+    FN.OFFICER			= 'F.DEPT.ACCT.OFFICER'
+    F.OFFICER			= ''
+    CALL OPF(FN.OFFICER, F.OFFICER)
+    
+    ;*Obtener la ultima fecha cerrada
+	CALL F.READ(FN.DATES, Y.COMPANY, R.DATE, F.DATES, Y.ERR.R0)
+	D.TODAY 		  = R.DATE<EB.DAT.TODAY>
+	D.LAST.PERIOD.END = R.DATE<EB.DAT.LAST.PERIOD.END>
+
+	FN.DAILY.ARR		= 'FBNK.EB.SLV.DAILY.ARR.DATA'
+    F.DAILY.ARR			= ''
+    CALL OPF(FN.DAILY.ARR, F.DAILY.ARR)
+
+
+RETURN
+
+
+
+END

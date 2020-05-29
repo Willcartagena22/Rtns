@@ -1,0 +1,381 @@
+*-----------------------------------------------------------------------------
+* <Rating>-204</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.E.NOF.TCIB.EXTERNAL(ENQ.DATA)
+*-----------------------------------------------------------------------------
+* Rutina que verifica que la informacion del cliente se encuentre guardada en T24
+*-----------------------------------------------------------------------------
+* Modification History :
+* Date              who          Reference          description
+*26-NOV-18       PSANCHEZ          25674			initial version            
+*-----------------------------------------------------------------------------
+$INSERT I_COMMON
+$INSERT I_EQUATE
+$INSERT I_F.SLV.NIT.CUSTOMER.CNT
+$INSERT I_DAS.AA.ARRANGEMENT.ACTIVITY
+$INSERT I_DAS.EB.EXTERNAL.USER
+$INSERT I_F.AA.ARRANGEMENT.ACTIVITY 
+$INSERT I_F.SLV.DUI.CUSTOMER.CNT
+$INSERT I_F.EB.EXTERNAL.USER.DEVICE
+$INSERT I_ENQUIRY.COMMON
+$INSERT I_System
+$INSERT I_F.CUSTOMER
+$INSERT I_F.EB.SLV.NEW.TCIB.USER
+$INSERT I_F.EB.ERROR
+$INSERT I_F.EB.SLV.KEYS.PARAMS
+$INSERT I_F.EB.EXTERNAL.USER
+*-----------------------------------------------------------------------------
+GOSUB INIT
+GOSUB PROCESS
+RETURN
+ INIT:
+ 	FN.SLV.NIT.CUSTOMER	= 'F.SLV.NIT.CUSTOMER.CNT'
+	F.SLV.NIT		= ''
+	CALL OPF(FN.SLV.NIT.CUSTOMER, F.SLV.NIT)
+	
+	FN.SLV.DUI.CUSTOMER	= 'F.SLV.DUI.CUSTOMER.CNT'
+	F.SLV.DUI		= ''
+	CALL OPF(FN.SLV.DUI.CUSTOMER, F.SLV.DUI)
+
+	
+	FN.ARR='F.AA.ARRANGEMENT.ACTIVITY'
+    F.ARR=''
+	CALL OPF(FN.ARR,F.ARR)
+			
+	FN.EXTERNAL.USER.DEVICE = "F.EB.EXTERNAL.USER.DEVICE"
+	F.EXT.USER.DEVICE = ""	
+	CALL OPF(FN.EXTERNAL.USER.DEVICE,F.EXT.USER.DEVICE)
+	
+	FN.TABLE.CUS 		= 'F.CUSTOMER' 
+	F.TABLE.CUS 		= ''
+	CALL OPF(FN.TABLE.CUS, F.TABLE.CUS)
+	
+	FN.SLV.NEW.TCIB.USER	= 'F.EB.SLV.NEW.TCIB.USER'
+	F.SLV.NEW		= ''
+	CALL OPF(FN.SLV.NEW.TCIB.USER, F.SLV.NEW)
+	
+	FN.ERR  = 'F.EB.ERROR'
+	F.ERR   = ''
+	CALL OPF(FN.ERR, F.ERR)
+	
+	FN.EXT.USER	 = 'F.EB.EXTERNAL.USER'
+	F.EXT.USER	 = ''
+	CALL OPF(FN.EXT.USER, F.EXT.USER)
+	
+	LOCATE 'DOCUMENT.ID' IN D.FIELDS<1> SETTING ITEM.POS THEN
+   	Y.DOCUMENT.ID = D.RANGE.AND.VALUE<ITEM.POS>
+   	END
+   
+   	LOCATE 'TYPE.DOCUMENT' IN D.FIELDS<1> SETTING ITEM.POS THEN
+   	Y.TYPE = D.RANGE.AND.VALUE<ITEM.POS>
+   	END
+   	
+  
+ RETURN
+ 
+ PROCESS:
+;*DEBUG**********************************************
+* 	Y.DOCUMENT.ID = '039207045'
+*	Y.TYPE   = 'DUI'
+;**************************************************** 	
+	IF Y.TYPE EQ 'NIT' THEN
+		GOSUB VALIDATE.NIT
+	END
+	IF Y.TYPE EQ 'DUI' THEN
+		GOSUB VALIDATE.DUI
+	END
+	GOSUB VERIFY.REGISTER
+		IF Y.BANDERA EQ 'N'THEN ;* N = Significa Usuario Nuevo
+		;*Verificar si ya existe un acuerdo de banca en línea para el cliente
+			THE.ARGS = CUS.NO
+			SEL.LIST = DAS$CUSARRANGEMENT
+			GOSUB VALIDATE.ARRANGMENT
+			;*Verificar si ya existe un usuario de banca en línea para el cliente
+			THE.LIST = DAS.EXT$ARRANGEMENT
+			THE.ARGS = AA.ARR.ID
+			GOSUB VALIDATE.EXTERNAL.USER
+			;*Verificar si ya tiene dispositivos asociados a banca en linea
+	  		GOSUB VALIDATE.DEVICE
+	  		;*Extraer los metodos de notificacion
+	  		GOSUB METHOD.NOTIFICATION
+	  		;*Extraer Token
+			GOSUB GENERATE.TOKEN
+			;* Registrar Informacion en la aplicacion Local
+			GOSUB FULL.TABLE
+			
+		END
+		ELSE ;*Es un usuario Registrado Anteriormente
+			;*GOSUB VERIFY.REGISTER
+			;*Extraer los metodos de notificacion
+	  		GOSUB METHOD.NOTIFICATION
+	  		;*Extraer Token
+			GOSUB GENERATE.TOKEN
+		
+		END			
+		GOSUB GET_ENQUIRY_DATA
+		
+ RETURN
+
+VERIFY.REGISTER:
+;* Verificacion del usuario para poder validar si esta bloqueado o no
+	Y.TABLE.ID = CUS.NO
+	CALL F.READ(FN.SLV.NEW.TCIB.USER,Y.TABLE.ID,R.SLV.NEW.TCIB,F.SLV.NEW,Y.ERROR.USER)
+	IF R.SLV.NEW.TCIB THEN
+		Y.USER.STATUS = 'NO'
+		Y.CONTADOR	= 0
+		Y.BANDERA = 'NO'
+	END
+	ELSE
+		Y.CONTADOR    = R.SLV.NEW.TCIB<EB.SLV10.FAIL.COUNTER>
+		Y.CONTADOR 	  = Y.CONTADOR + 1 ;*Incrementa solicitud ya que es un usuario existente
+		Y.USER.STATUS = R.SLV.NEW.TCIB<EB.SLV10.STATUS>
+		Y.BANDERA = 'SI'
+	END
+	
+	IF Y.USER.STATUS EQ 'SI' THEN
+		Y.ERROR = 'EB-SLV.USER.BLOCK'
+		GOSUB GET.DESCRIPT.ERROR	
+	END
+	GOSUB KEYS.PARAMS
+	IF Y.CONTADOR GT Y.LIMITE.CONTADOR THEN
+		Y.ERROR = 'EB-SLV.USER.BLOCK'
+		GOSUB GET.DESCRIPT.ERROR	
+	END
+	
+
+RETURN
+
+VALIDATE.ARRANGMENT:
+;*Obtiene id de actividades que generaron los ISA para el customer especifico
+    	CALL DAS('AA.ARRANGEMENT.ACTIVITY',SEL.LIST,THE.ARGS,TABLE.SUFFIX)	
+			IF SEL.LIST THEN
+				CALL F.READ(FN.ARR,SEL.LIST,REC.ARR,F.ARR,REC.ERROR)
+			END
+        	
+			;*Id Isa
+        		AA.ARR.ID=REC.ARR<AA.ARR.ACT.ARRANGEMENT>
+				;*CLiente al que pertenece el ISA
+        		CUS.NO=REC.ARR<AA.ARR.ACT.CUSTOMER>
+        		;*Estado del Acuerdo de banca en linea
+        		Y.STATUS.ARR = REC.ARR<AA.ARR.ACT.RECORD.STATUS>
+
+        ;* Verificar si ya existe un ID de Acuerdo de banca en línea para el cliente.
+		IF AA.ARR.ID EQ '' THEN
+			Y.ERROR = 'EB-SLV.ARR.NOT.EXITS'
+			GOSUB GET.DESCRIPT.ERROR
+		END
+		;* Verificar el estado del Acuerdo de banca en línea para el cliente.
+		IF Y.STATUS.ARR EQ 'INAU' THEN
+			Y.ERROR = 'EB-SLV.ARR.STATUS'
+			GOSUB GET.DESCRIPT.ERROR
+		END
+RETURN
+
+VALIDATE.EXTERNAL.USER:
+*;Verifica si external user existe
+	THE.LIST = DAS.EXT$ARRANGEMENT
+    THE.ARGS = AA.ARR.ID
+    CALL DAS('EB.EXTERNAL.USER',THE.LIST,THE.ARGS,TABLE.SUFFIX)
+    EXT.USER.ID=THE.LIST
+	IF EXT.USER.ID THEN
+		CALL F.READ(FN.EXT.USER,EXT.USER.ID,R.EXT,F.EXT.USER,Y.ERROR.EXT)
+    	IF R.EXT THEN
+    		Y.EXT.STATUS = R.EXT<EB.XU.RECORD.STATUS>
+    		IF Y.EXT.STATUS EQ '' THEN
+    			Y.ERROR = 'EB-SLV.EXT.LIVE' ;*Ya posees un ID de usuario registrado
+    			GOSUB GET.DESCRIPT.ERROR
+    		END
+    	END
+
+	END    
+RETURN
+
+VALIDATE.NIT:
+;*Verificar si el número de NIT ingresado corresponde a un cliente existente en T24.
+	 			CALL F.READ(FN.SLV.NIT.CUSTOMER,Y.DOCUMENT.ID,R.NIT,F.SLV.NIT,Y.NIT.ERR)
+				IF Y.NIT.ERR THEN 
+					Y.DOC = 'NO'
+*					Y.MSG.ERROR = 'Numero de NIT invalido'
+*					Y.FLAG.ERROR = 1
+					Y.ERROR = 'EB-SLV.NIT.NOT.EXITS'
+					GOSUB GET.DESCRIPT.ERROR
+	 			END
+	 			ELSE
+					CUS.NO = R.NIT<SLV.NIT.CUSTOMER.CODE>
+	 				Y.FLAG.ERROR = 0
+	 				Y.DOC = 'SI'
+				END
+RETURN
+
+VALIDATE.DUI:
+		CALL SLV.S.VALIDATE.DUI(Y.DOCUMENT.ID,Y.RESULT,Y.ERROR.CODE)
+		IF Y.ERROR.CODE THEN
+			Y.DOC = 'NO'
+			Y.MSG.ERROR = 'Numero de DUI invalido'
+			Y.FLAG.ERROR = 1
+		END
+		ELSE
+			;*Verificar si el número de DUI ingresado corresponde a un cliente existente en T24.
+			CALL F.READ(FN.SLV.DUI.CUSTOMER,Y.DOCUMENT.ID,R.DUI,F.SLV.DUI,Y.DUI.ERR)
+			IF Y.DUI.ERR THEN
+				Y.DOC = 'NO'
+				Y.MSG.ERROR = 'Numero de DUI invalido'
+				Y.FLAG.ERROR = 1
+			END
+			ELSE
+				CUS.NO =R.DUI<SLV.DUI.CUSTOMER.CODE>
+				Y.FLAG.ERROR = 0
+				Y.DOC = 'SI'
+			END
+		END
+	
+RETURN
+
+VALIDATE.DEVICE:
+*Verificar la disponibilidad del dispositivo o cuales tiene
+	Y.SELECT.EXTDEV = 'SELECT ' : FN.EXTERNAL.USER.DEVICE : ' WITH USER.ID EQ ' : EXT.USER.ID 
+		CALL EB.READLIST(Y.SELECT.EXTDEV , LIST.ARR.EXT.DEV, '', NO.OF.RECS.DEV, Y.ERR)
+				FOR K = 1 TO NO.OF.RECS.DEV
+			    	CALL F.READ(FN.EXTERNAL.USER.DEVICE.NAU, LIST.ARR.EXT.DEV<K>, EXT.DEV.REC.NAU, F.EXT.USER.DEVICE.NAU, ERR.EXT.DEV)
+			    	IF EXT.DEV.REC.NAU NE '' THEN
+			    		
+			    	END
+			    	ELSE
+			    		CALL F.READ(FN.EXTERNAL.USER.DEVICE, LIST.ARR.EXT.DEV<K>, EXT.DEV.REC, F.EXT.USER.DEVICE, ERR.EXT.DEV)
+				        Y.ID.EXT.DEV = LIST.ARR.EXT.DEV<K> 
+						Y.NAME.USER  = EXT.DEV.REC<EB.EXDEV.USER.ID> 
+						Y.TYPE.DEVICE = EXT.DEV.REC<EB.EXDEV.DEVICE.TYPE>
+						Y.COD.REGISTER = EXT.DEV.REC<EB.EXDEV.CODE.ACTIVATION>
+						Y.NO.OF.RECS.DEV =NO.OF.RECS.DEV
+						
+	 	            	;*GOSUB OUT.EXT.DEV  
+	 	            	
+			    	END
+			    NEXT K					
+RETURN
+
+METHOD.NOTIFICATION:
+	Y.EMAIL		= ''
+	Y.SMS		= ''
+	CALL F.READ(FN.TABLE.CUS,CUS.NO, REC.CUS,F.TABLE.CUS, ERR.CUS)
+	Y.EMAIL		= REC.CUS<EB.CUS.EMAIL.1>
+	Y.SMS		= REC.CUS<EB.CUS.SMS.1>
+RETURN
+
+GENERATE.TOKEN:
+;*Generar Token Unico
+		Y.ID    = 'STM'
+		Y.SEEDS  = Y.SMS : @VM : Y.DOCUMENT.ID
+		Y.TOKEN = ''
+		Y.ERROR = ''
+		CALL SlV.UTIL.NC.TOKEN(Y.ID, Y.SEEDS, Y.TOKEN, Y.ERROR)
+		Y.TOKEN=FIELD(Y.TOKEN, @VM, 1)
+		;*Si se produjo un error en la generacion del Token retornar error
+*		IF Y.ERROR NE '' THEN
+*			E = Y.ERROR
+*			CALL ERR
+*			RETURN
+*		END
+RETURN
+
+GET_ENQUIRY_DATA:
+	;* Construccion del arreglo
+	STR.PD =''
+	STR.PD := CUS.NO : "*" ;*1
+	STR.PD := AA.ARR.ID : "*" ;*2
+	STR.PD := Y.TYPE : "*" ;*3
+	STR.PD := Y.DOCUMENT.ID:"*"  ;*4
+	STR.PD := EXT.USER.ID:"*"  ;*5
+	STR.PD := Y.STATUS.ARR:"*"  ;*6
+	STR.PD := NO.OF.RECS.DEV:"*"  ;*7
+	STR.PD := Y.ID.EXT.DEV:"*"  ;*8
+	STR.PD := Y.TYPE.DEVICE:"*"  ;*9
+	STR.PD := Y.CODE.REGISTER:"*"  ;*10
+	STR.PD := Y.MSG.ERROR:"*"  ;*11
+	STR.PD := Y.EMAIL:"*"	;*12
+	STR.PD := Y.SMS:"*" ;*13
+	STR.PD := Y.TOKEN ;*14
+	
+	
+*	CRT STR.PD
+*	CRT Y.TXT
+	ENQ.DATA<-1> = STR.PD
+*	Y.TXT = 'ENQ.DATA = ' ENQ.DATA
+;*	CRT Y.TXT
+*	GOSUB WRITE_LOG_FILE
+RETURN
+
+FULL.TABLE:
+*	Y.CANT.PROXIES	= DCOUNT(Y.PROXY.ARR,@VM)
+	GOSUB GET.DATETIME
+	REC.SLV.PR.USG	= ""
+	REC.SLV.PR.USG<EB.SLV10.CUSTOMER.ID>    = CUS.NO
+	REC.SLV.PR.USG<EB.SLV10.DOCUMENT>		= Y.DOCUMENT.ID
+	REC.SLV.PR.USG<EB.SLV10.DOCUMENT.TYPE>	= Y.TYPE
+	REC.SLV.PR.USG<EB.SLV10.START.DATE>		= X
+	REC.SLV.PR.USG<EB.SLV10.USER.ISA.ID>	= AA.ARR.ID
+	REC.SLV.PR.USG<EB.SLV10.STATUS>			= Y.STATUS.ARR
+	REC.SLV.PR.USG<EB.SLV10.EXTERNAL.USER>	= EXT.USER.ID
+;*	REC.SLV.PR.USG<EB.SLV10.NUM.SERIE>		= EXT.USER.ID
+	REC.SLV.PR.USG<EB.SLV10.COD.ACTIVATION> = Y.COD.REGISTER
+;*	REC.SLV.PR.USG<EB.SLV10.COD.REGISTER>   = Y.COD.REGISTER
+	REC.SLV.PR.USG<EB.SLV10.DEVICE.TYPE> 	= Y.TYPE.DEVICE
+;*	REC.SLV.PR.USG<EB.SLV10.DEVICE.STATUS> 	= Y.TYPE.DEVICE
+;*	REC.SLV.PR.USG<EB.SLV10.USER.TYPE> 		= Y.TYPE.DEVICE
+;*	REC.SLV.PR.USG<EB.SLV10.CHANNEL> 		= Y.TYPE.DEVICE
+;*	REC.SLV.PR.USG<EB.SLV10.FAIL.COUNTER> 	= Y.TYPE.DEVICE
+;*	REC.SLV.PR.USG<EB.SLV10.TRAN.TIME>	 	= Y.TYPE.DEVICE
+;*	REC.SLV.PR.USG<EB.SLV10.COMPANY>	 	= Y.TYPE.DEVICE
+    ;*Complementar la demas informacion.
+	REC.SLV.PR.USG<EB.SLV10.DATE.TIME>	 	= X
+	REC.SLV.PR.USG<EB.SLV10.INPUTTER>	 	= OPERATOR
+	REC.SLV.PR.USG<EB.SLV10.AUTHORISER>	 	= OPERATOR
+
+
+	CALL F.WRITE(FN.SLV.NEW.TCIB.USER, CUS.NO, REC.SLV.PR.USG)
+	;*CALL JOURNAL.UPDATE ('') 
+RETURN
+
+;* Archivo para Revisión de Errores
+WRITE_LOG_FILE:
+	DIR.NAME = 'CHQ.OUT'
+	R.ID =  'PS_' : TODAY : '.txt'
+
+	OPENSEQ DIR.NAME, R.ID TO SEQ.PTR
+		WRITESEQ Y.TXT APPEND TO SEQ.PTR THEN
+		END
+	CLOSESEQ SEQ.PTR 
+RETURN
+*GET.DATETIME:		
+*	X = OCONV(DATE(),"D-")
+*    V$TIMEDATE = TIMEDATE()
+*    V$TIMEDATE = V$TIMEDATE[1,5] 
+*    CONVERT ":" TO "" IN V$TIMEDATE
+*    X = X[9,2] : X[1,2] : X[4,2] : V$TIMEDATE    
+*RETURN
+GET.DATETIME:
+	HORA = TIMEDATE()[1,8]
+	FECHA = OCONV(DATE(),"D/")
+  	X = FECHA[4,2]:'/':FECHA[1,2]:'/':FECHA[7,4]:' ': HORA
+RETURN
+GET.DESCRIPT.ERROR:
+		;*Obtener Error
+		CALL CACHE.READ(FN.ERR, Y.ERROR, R.ERR, E.ERR)
+		IF R.ERR<EB.ERR.ERROR.MSG> EQ '' THEN
+			R.ERR<EB.ERR.ERROR.MSG> = Y.ERROR
+		END
+		;*A.INFO = CHANGE(R.ERR<EB.ERR.ERROR.MSG>, '&', Y.REPLA) : '* * * * * * * *'
+RETURN
+
+KEYS.PARAMS:
+		CALL F.READ(FN.KEYS, 'SLV.TCIB.NC.CONF', R.KEYS, F.KEYS, E.KEYS)
+		FIND ID IN R.KEYS<EB.SLV18.PARAM.ID> SETTING Ap, Vp THEN
+			Y.LIMITE.CONTADOR    = FIELD(R.KEYS<EB.SLV18.VALOR><Ap, Vp>, SM, 1) ;*Limite Contador
+		END
+		ELSE
+			ERROR = 'Parametros para validacion de usuario No Existen'
+			RETURN ;*Retornar si generar Token
+		END
+RETURN
+
+END

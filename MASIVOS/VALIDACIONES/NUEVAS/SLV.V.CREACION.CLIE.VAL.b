@@ -1,0 +1,75 @@
+*-----------------------------------------------------------------------------
+* <Rating>8</Rating>
+*-----------------------------------------------------------------------------
+    SUBROUTINE SLV.V.CREACION.CLIE.VAL
+
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_EQUATE
+    $INSERT I_F.EB.SLV.VALIDACIONES.MASIVOS
+    $INSERT I_F.EB.SLV.MASTER.MASIVOS
+    $INSERT I_F.EB.SLV.ITEMS.MASIVOS
+
+    GOSUB INICIAR
+    GOSUB ABRIR
+    GOSUB PROCESAR
+
+INICIAR:
+    FN.EB.SLV.VALIDACIONES.MASIVOS='F.EB.SLV.VALIDACIONES.MASIVOS'
+    F.EB.SLV.VALIDACIONES.MASIVOS=''
+    FN.EB.SLV.MASTER.MASIVOS='F.EB.SLV.MASTER.MASIVOS'
+    F.EB.SLV.MASTER.MASIVOS=''
+    FN.EB.SLV.ITEMS.MASIVOS='F.EB.SLV.ITEMS.MASIVOS'
+    F.EB.SLV.ITEMS.MASIVOS=''
+    RETURN
+
+ABRIR:
+    CALL OPF(FN.EB.SLV.VALIDACIONES.MASIVOS, F.EB.SLV.VALIDACIONES.MASIVOS)
+    CALL OPF(FN.EB.SLV.MASTER.MASIVOS, F.EB.SLV.MASTER.MASIVOS)
+    CALL OPF(FN.EB.SLV.ITEMS.MASIVOS, F.EB.SLV.ITEMS.MASIVOS)
+    RETURN
+
+PROCESAR:
+    CREAR=R.NEW(EB.SLV32.CLIENTES)
+    TEXTO.ARCHIVO='CREAR :':CREAR
+
+
+    Y.OPTION =''
+    IF CREAR='SI' THEN
+        ID.CARGA='BKML1552085584443'
+        ID.CARGA= ID.NEW
+        STMT.ARRANGEMENT = "SELECT ":FN.EB.SLV.VALIDACIONES.MASIVOS:" WITH @ID LIKE ":ID.CARGA:"%"
+
+
+        ;*EJECUTAMOS EL QUERY
+        CALL EB.READLIST(STMT.ARRANGEMENT, ARRANGEMENT.LIST,'',NO.OF.RECS,Y.ARRANGEMENT.ERR1)
+
+        IF ARRANGEMENT.LIST THEN
+            FOR I=1 TO NO.OF.RECS
+                ID.TRX = ARRANGEMENT.LIST<I>
+                ;*OBTENEMOS EL DETALLE DEL PAGO DEL COLECTOR
+                CALL F.READ(FN.EB.SLV.VALIDACIONES.MASIVOS,ID.TRX,RS.VAL,F.EB.SLV.VALIDACIONES.MASIVOS,VAL.ERR)
+
+                CAMPO.VAL = RS.VAL<EB.SLV30.NOMBRE.CAMPO>
+                IF CAMPO.VAL THEN
+                    STRERR ='EB-VAL.OFS.CARGA.M'
+                    GOSUB CRT_ERROR
+                END
+
+            NEXT
+        END
+
+    END
+    RETURN
+
+CRT_ERROR:
+    ETEXT = STRERR
+    CALL STORE.END.ERROR
+
+    RETURN
+
+
+
+    END

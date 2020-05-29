@@ -1,0 +1,120 @@
+*-----------------------------------------------------------------------------
+* <Rating>-47</Rating>
+*-----------------------------------------------------------------------------
+    SUBROUTINE SLV.V.CUSTOMER.PRODUCT
+*-----------------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_EQUATE
+    $INSERT I_AA.LOCAL.COMMON
+    $INSERT I_F.AA.ARRANGEMENT.ACTIVITY
+    $INSERT I_F.CUSTOMER
+    $INSERT I_F.CUSTOMER.ACCOUNT
+    $INSERT I_F.ACCOUNT
+    $INSERT I_F.EB.SLV.GLOBAL.PARAM
+    $INSERT I_F.AA.ACCOUNT
+    $INSERT I_F.AA.ARRANGEMENT
+*-----------------------------------------------------------------------------
+
+    GOSUB INIT
+    GOSUB OPEN.FILE
+    GOSUB CAT.SIMP
+    GOSUB PROCESS
+    RETURN
+
+INIT:
+    CUSTOMER.FN      = 'F.CUSTOMER'
+    CUSTOMER.F       = ''
+    CUSTOMER.ACC.FN  = 'F.CUSTOMER.ACCOUNT'
+    CUSTOMER.ACC.F   = ''
+    ACC.FN           = 'F.ACCOUNT'
+    ACC.F            = ''
+    GLOBAL.PARAM.FN  = 'F.EB.SLV.GLOBAL.PARAM'
+    GLOBAL.PARAM.F   = ''
+    RETURN
+
+OPEN.FILE:
+    CALL OPF(CUSTOMER.FN,CUSTOMER.F)
+    CALL OPF(CUSTOMER.ACC.FN,CUSTOMER.ACC.F)
+    CALL OPF(ACC.FN,ACC.F)
+    CALL OPF(GLOBAL.PARAM.FN,GLOBAL.PARAM.F)
+    RETURN
+
+PROCESS:
+    EQU ID.PRODUCT      TO 'ID.CUENTA.SIMPLIFICADA'
+    CUSTOMER.VERSION    = R.NEW(AA.ARR.ACT.CUSTOMER)
+    PRODUCT.AA          = R.NEW(AA.ARR.ACT.PRODUCT)
+    
+    CALL F.READ(GLOBAL.PARAM.FN,ID.PRODUCT,GLOBAL.PARAM.R,GLOBAL.PARAM.F,ERR)
+    
+    ID.PRODUCT.CONF = GLOBAL.PARAM.R<EB.SLV39.VALOR.PARAM>
+    
+;*VALIDAMOS QUE EL PRODUCTO SELECCIONADO SEA DIFENTE A LA CUENTA DE AHORRO SIMPLIFICADA
+    IF PRODUCT.AA NE ID.PRODUCT.CONF THEN
+        ;*OBTENEMOS EL DETALLE DEL CLIENTE
+        CALL F.READ(CUSTOMER.FN,CUSTOMER.VERSION,CUSTOMER.R,CUSTOMER.F,CUSTOMER.ERR)
+        CALL GET.LOC.REF('CUSTOMER','LF.NIT',POS.NIT)
+        CUSTOMER.NIT     = CUSTOMER.R<EB.CUS.LOCAL.REF,POS.NIT>
+        IF CUSTOMER.NIT EQ '' THEN
+            AF = AA.ARR.ACT.CUSTOMER
+            AV = AA.ARR.ACT.CUSTOMER
+            LLAVE.BUSQUEDA = 'No se pueden crear cuentas para clientes simplificados'
+            ETEXT = LLAVE.BUSQUEDA
+            CALL STORE.END.ERROR
+        END
+
+    END ;*END IF PRODUCT.AA NE 'CTA.SIMPLIFICADA' THEN
+    ELSE
+    CALL F.READ(CUSTOMER.ACC.FN,CUSTOMER.VERSION,CUSTOMER.ACC.R,CUSTOMER.ACC.F,CUSTOMER.ACC.ERR)
+    LIST.ACCOUNT.CUST = CUSTOMER.ACC.R
+
+    LOOP
+        REMOVE CTA FROM LIST.ACCOUNT.CUST SETTING POS.CTA
+    WHILE CTA NE ''
+        CALL F.READ(ACC.FN,CTA,ACC.R,ACC.F,ACC.ERR)
+        CATEGORY = ACC.R<AC.CATEGORY>
+
+        IF CATEGORY EQ CATEGORY.SIMP THEN
+                   AF             = AA.ARR.ACT.CUSTOMER
+                   AV             = AA.ARR.ACT.CUSTOMER
+                   LLAVE.BUSQUEDA = 'Cliente ':CUSTOMER.VERSION:', ya posee una cuenta simplificada'
+                   ETEXT          = LLAVE.BUSQUEDA
+                   CALL STORE.END.ERROR
+                   BREAK
+        END ;*END IF CATEGORY EQ 6016 THEN
+
+    REPEAT ;*END LOOP
+
+    END ;*END ELSE PRODUCT.AA NE 'CTA.SIMPLIFICADA' THEN
+
+    RETURN
+
+CAT.SIMP:
+
+    FN.AA.PRODUCT.DESIGNER = 'F.AA.PRD.DES.ACCOUNT'
+    F.AA.PRODUCT.DESIGNER = ''
+    CALL OPF(FN.AA.PRODUCT.DESIGNER,F.AA.PRODUCT.DESIGNER)
+    Y.PRODUCTO='CUENTA.AHORRO.SIM'
+    SELECT.PROD.DES = "SELECT " : FN.AA.PRODUCT.DESIGNER : " WITH @ID LIKE '" : Y.PRODUCTO : "...'"
+    CALL EB.READLIST(SELECT.PROD.DES, PROD.DES,'',NO.REC.PROD.DES, ERR.REC.PROD.DES)
+    IF NO.REC.PROD.DES NE 0 THEN
+        CALL F.READ(FN.AA.PRODUCT.DESIGNER,PROD.DES, PROD.DES.REC, F.AA.PRODUCT.DESIGNER, ERR.REC1)
+        IF PROD.DES.REC THEN
+
+
+            CALL F.READ(FN.AA.PRODUCT.DESIGNER,PROD.DES, PROD.DES.REC, F.AA.PRODUCT.DESIGNER, ERR.REC1)
+            IF PROD.DES.REC THEN
+                CATEGORY.SIMP = PROD.DES.REC<AA.AC.CATEGORY> ;*Obtener el parent para luego ir a traer sus propiedades
+            END
+
+        END
+
+    END
+    RETURN
+
+
+
+    END

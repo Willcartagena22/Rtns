@@ -1,0 +1,38 @@
+*
+* Insert file for named commons that can be used in the
+* local routine developed for AA. Local routines can be
+* attached at various places in AA framework like pre and post
+* routine before and after an action, charge routine, payment
+* calculation routine
+* These common variables are equivalent of core AA common variable
+
+    COMMON/AALOCALCOMMON/c_aalocArrId,  ;* Arrangement id
+    c_aalocArrangementRec,    ;*Main arrangement record
+    c_aalocArrProductId,      ;* Stores the product used by the arrangement
+    c_aalocArrCurrency,       ;* Store the currency used by the arrangement
+    c_aalocActivityId,        ;* Activity id loaded in the property
+    c_aalocTxnReference,      ;* Arrangement activity transaction reference
+    c_aalocCurrAction,        ;* Current action being processed by action manager
+    c_aalocArrActivityRec,    ;* Current arrangement activity record
+    c_aalocLocalRefList,      ;* List of local ref fields
+    c_aalocCurrActivity,      ;* User/System generated activities
+    c_aalocLinkedAccount,     ;* Linked Account id
+    c_aalocProductRecord,     ;* Stores the published product record for the arrangement
+    c_aalocPropClassId,       ;* Property class ID of current property
+    c_aalocPropertyId,        ;* Current property
+    c_aalocProdPropRec,       ;* Stores the published product property for the arrangement
+    c_aalocActivityStatus,    ;* Stores the status of current activity like . UNAUTH, DEL, REV-DEL
+    c_aalocArrActivityId,     ;* Store the arrangement activity id
+    c_aalocActivityEffDate,   ;* Effective date
+    c_aalocAccountDetails,    ;* Account Details
+    c_aalocForwardDelCond,    ;* If user deleted the condition dynamically then system will set this flag in all the stages
+    c_aalocMasterActivity,    ;* Master activity Id if required for local routines
+    c_aalocReserved5,
+    c_aalocReserved4,
+    c_aalocReserved3,
+    c_aalocReserved2,
+    c_aalocReserved1
+
+
+*-------------------------------------------------------------------------------
+

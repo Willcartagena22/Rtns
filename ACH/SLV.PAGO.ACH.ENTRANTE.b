@@ -1,0 +1,136 @@
+*-----------------------------------------------------------------------------
+* <Rating>679</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.PAGO.ACH.ENTRANTE
+*-----------------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+$INSERT I_COMMON
+$INSERT I_EQUATE
+$INSERT I_F.FUNDS.TRANSFER
+$INSERT I_F.EB.SLV.TIPO.ACC.ACH 
+$INSERT I_F.ACCOUNT
+$INSERT I_F.EB.SLV.RANG.PARAM
+*-----------------------------------------------------------------------------
+
+GOSUB INIT
+GOSUB OPF
+GOSUB PROCESS
+
+
+INIT:
+	FN.TIPO.ACC.ACH = 'F.EB.SLV.TIPO.ACC.ACH'
+	F.TIPO.ACC.ACH	= ''
+	FN.ACC	= 'F.ACCOUNT'
+	F.ACC	= ''
+	FN.RANG.PARAM = 'F.EB.SLV.RANG.PARAM'
+	F.RANG.PARAM = ''
+	EQU ID.BANCO.AZUL TO 'BA119020W6LF5'
+	EQU RANGO.ACC 		TO 'SLV.CAT.CUENTAS'
+	EQU CTA.COR TO 'CTA.COR'
+	EQU CTA.AHO TO 'CTA.AHO'
+	GOSUB GET.LOCAL.REF
+RETURN
+
+OPF:
+	CALL OPF(FN.TIPO.ACC.ACH, F.TIPO.ACC.ACH) 
+	CALL OPF(FN.ACC,F.ACC)
+	CALL OPF(FN.RANG.PARAM, F.RANG.PARAM)
+RETURN
+
+PROCESS:
+
+	GOSUB GET.ACC.INFO
+	 
+	SELECT.PROP = 'SELECT ':FN.TIPO.ACC.ACH:' WITH CODIGO.PROP EQ ':R.NEW(FT.LOCAL.REF)<1,Y.ACH.PROP>
+	CALL EB.READLIST(SELECT.PROP, LIST.PROP, NAME.PROP, COUNT.PROP, ERR.PROP)
+	
+	IF LIST.PROP THEN
+		 CALL F.READ(FN.TIPO.ACC.ACH,LIST.PROP<1>,R.TYPE.ACC.ACH,F.TIPO.ACC.ACH,E.TIPO.ACC.ACH)  
+		 R.NEW(FT.LOCAL.REF)<1,Y.LF.TCE.NARR> = R.TYPE.ACC.ACH<EB.SLV94.CODIGO.PROP>
+		 
+		 ;* ------------- LOG -----------------
+		 	TEXTO.ARCHIVO = 'NARRATIVE -> ':R.NEW(FT.LOCAL.REF)<1,Y.LF.TCE.NARR>: 'ERR -> ':ERR.PROP
+		 	GOSUB ESCRIBIR.ARCHIVO
+		 ;*------------------------------------
+		 
+	END
+	
+	R.NEW(FT.LOCAL.REF)<1,Y.ACH.TIPO.TXN> = '0C' 
+	
+	;* Recupear desde tabla EB.SLV.BANKS.DETAILS el codigo de banco -> BA119020W6LF5 
+	CALL F.READ(FN.BANKS,ID.BANCO.AZUL,R.BANKS,F.BANKS,E.BANKS) 
+	R.NEW(FT.LOCAL.REF)<1,Y.ACH.BANCO.AZUL> = R.BANKS<EB.SLV.BANK.ID.BANK>
+		
+RETURN
+
+GET.LOCAL.REF:
+
+   Y.APPL = "FUNDS.TRANSFER"
+    Y.FIELD = "LF.TCE.NARR": VM :"LF.AMOUNT":VM:"ACH.BANCO.BENEF":VM:"ACH.PROP":VM:"ACH.BANCO.AZUL":VM:"ACH.TIPO.TXN":VM:"LF.ID.COL":VM:"ACH.BANCO.AZUL":VM:"ID.BENEF.ACH":VM:"ACCT.BENEF.ACH" 
+    Y.POS = ""
+    CALL MULTI.GET.LOC.REF(Y.APPL,Y.FIELD,Y.POS)
+
+    Y.LF.TCE.NARR 			= Y.POS<1,1>
+    Y.LF.AMOUNT 			= Y.POS<1,2>
+    Y.ACH.BANCO.BENEF		= Y.POS<1,3>
+    Y.ACH.PROP 				= Y.POS<1,4>
+   	Y.ACH.BANCO.AZUL		= Y.POS<1,5>
+    Y.ACH.TIPO.TXN			= Y.POS<1,6>
+    Y.LF.ID.COL				= Y.POS<1,7>
+    Y.ID.BANCO.AZUL			= Y.POS<1,8>
+    Y.BENEF.ACH				= Y.POS<1,9>
+    Y.ACCT.BENEF.ACH		= Y.POS<1,10>
+RETURN
+
+GET.ACC.INFO:
+
+	FT.AZUL.ACC.TYPE = '0'
+	;*Account
+	CALL F.READ(FN.ACC, R.NEW(FT.CREDIT.ACCT.NO), REC.ACC.CURR, F.ACC, ERR.ACC.CURR)
+
+	Y.CATEGORY =  REC.ACC.CURR<AC.CATEGORY>
+	
+	;*Obtiene Parametria de Categories para Cuentas de ahorro y corriente
+	CALL F.READ(FN.RANG.PARAM, RANGO.ACC, R.PARAM, F.RANG.PARAM, ERR.RANG.PARAM)
+	;*Cuentas Ahorro
+    FIND CTA.AHO IN R.PARAM<EB.SLV56.ID.RANGO> SETTING Ap, Vp THEN
+    	;*Validar si el Category de la cuenta se encuentra en el Rango
+       	IF Y.CATEGORY GE R.PARAM<EB.SLV56.RANGO.INF><Ap, Vp> AND Y.CATEGORY LE R.PARAM<EB.SLV56.RANGO.SUP><Ap, Vp> THEN
+			FT.AZUL.ACC.TYPE 		= '1'
+		END
+ 	END 
+ 	;*Cuentas Corrientes
+ 	FIND CTA.COR IN R.PARAM<EB.SLV56.ID.RANGO> SETTING Ap, Vp THEN
+    	;*Validar si el Category de la cuenta se encuentra en el Rango
+       	IF Y.CATEGORY GE R.PARAM<EB.SLV56.RANGO.INF><Ap, Vp> AND Y.CATEGORY LE R.PARAM<EB.SLV56.RANGO.SUP><Ap, Vp> THEN
+			FT.AZUL.ACC.TYPE 		= '1'
+		END
+ 	END
+ 	
+ 	IF FT.AZUL.ACC.TYPE NE '1' THEN
+ 		Y.KEY.ERROR = 'EB-SLV.TYPE.ACC.RECEIVED.NO.VALID'
+ 		GOSUB SEND.ERROR
+ 	END
+ 	
+RETURN
+
+SEND.ERROR:
+   ETEXT = Y.KEY.ERROR
+   CALL STORE.END.ERROR
+RETURN
+
+ESCRIBIR.ARCHIVO:
+    DIR.NAME= 'ACH'
+    R.ID   = 'ACH.PAGO.ENTRANTE.':TODAY:'.txt'
+;* hacer que escriba un archivo
+
+    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+    END
+    CLOSESEQ SEQ.PTR
+RETURN
+
+END

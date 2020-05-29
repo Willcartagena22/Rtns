@@ -1,0 +1,125 @@
+*-----------------------------------------------------------------------------
+* <Rating>-50</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.E.AML.MASIVOS(A.INFO)
+
+* Modification History :
+*-----------------------------------------------------------------------------
+$INSERT I_COMMON
+$INSERT I_EQUATE
+$INSERT I_F.EB.SLV.ITEMS.MASIVOS
+$INSERT I_ENQUIRY.COMMON
+*-----------------------------------------------------------------------------
+
+GOSUB INICIAR
+GOSUB ABRIR
+GOSUB PROCESAR
+
+INICIAR:
+    FN.EB.SLV.ITEMS.MASIVOS='F.EB.SLV.ITEMS.MASIVOS'
+    F.EB.SLV.ITEMS.MASIVOS=''
+    RETURN
+    
+    
+ABRIR:
+    LOCATE 'ID.CARGA' IN D.FIELDS<1> SETTING ITEM.POS THEN
+    ID.CARGA = D.RANGE.AND.VALUE<ITEM.POS>
+    END
+  
+    CALL OPF(FN.EB.SLV.ITEMS.MASIVOS,F.EB.SLV.ITEMS.MASIVOS)
+
+
+RETURN
+
+PROCESAR:
+CONT.ACC =0
+CONT.CLI=0
+*ID.CARGA='BKML1552064971170'
+ESTADO1='Listo'
+SELECT.ITEMS= "SELECT " :FN.EB.SLV.ITEMS.MASIVOS:" WITH @ID LIKE %":ID.CARGA:"%" :" AND RESERVADO.1 EQ ":"'":ESTADO1:"'"
+
+    CALL EB.READLIST(SELECT.ITEMS, ID.ITEM, '' , NO.OF.RECS.ITEMS, ERR.ITEMS)
+    IF NO.OF.RECS.ITEMS NE 0 THEN
+        FOR H = 1 TO NO.OF.RECS.ITEMS
+            CALL F.READ(FN.EB.SLV.ITEMS.MASIVOS,ID.ITEM<H>, LISTA.ITEMS,F.EB.SLV.ITEMS.MASIVOS, ERR.ITEMS.LS)
+            P.ID= ID.ITEM<H>
+            NOMBRE= LISTA.ITEMS<EB.SLV3.NAME.1>
+            NOMBRE2= LISTA.ITEMS<EB.SLV3.NAME.2>
+            NOMBRE3= LISTA.ITEMS<EB.SLV3.GIVEN.NAMES>
+            APELLIDO=LISTA.ITEMS<EB.SLV3.TEXT>
+            APELLIDO2=LISTA.ITEMS<EB.SLV3.FAMILY.NAME>
+            APELLIDOCASADA=LISTA.ITEMS<EB.SLV3.PREVIOUS.NAME>
+            DUI=LISTA.ITEMS<EB.SLV3.LF.DUI>
+            PASAPORTE=LISTA.ITEMS<EB.SLV3.LEGAL.ID.2>
+
+            PAIS=LISTA.ITEMS<EB.SLV3.NATIONALITY>
+            
+            IF CLIENTE THEN
+            CONT.CLI=CONT.CLI+1
+            END
+            IF CUENTA THEN
+            CONT.ACC =CONT.ACC +1
+            END
+            
+           
+           APELLIDOS=APELLIDO:' ':APELLIDO2
+           NOMBRES=NOMBRE:' ':NOMBRE2
+           IF NOMBRE3 THEN
+           NOMBRES=NOMBRE:' ':NOMBRE2:' ':NOMBRE3
+           END
+           IF APELLIDOCASADA THEN
+           APELLIDOS=APELLIDO:' ':APELLIDOCASADA
+           END
+          
+           IF PAIS NE 'SV' THEN
+           DUI=PASAPORTE
+           END
+           
+            A.INFO<-1>= APELLIDOS:'|':NOMBRES:'|':PAIS:'|':DUI
+            ARRAY:= APELLIDOS:'|':NOMBRES:'|':PAIS:'|':DUI:'~'
+        
+        NEXT H
+        GOSUB IMPRIMIR
+    END
+		
+	
+				
+RETURN 
+
+IMPRIMIR:
+AA=ARRAY
+
+ TRAMA.MULTIVALOR.X2 = CHANGE(AA,'~',VM)
+
+    CANTIDAD.REGISTROS.MULTIVALOR.X2 = DCOUNT(TRAMA.MULTIVALOR.X2,VM)-1 
+    FOR J = 1 TO CANTIDAD.REGISTROS.MULTIVALOR.X2
+
+        SEGMENTO.X2 = FIELD(TRAMA.MULTIVALOR.X2,VM,J)
+        
+		IF J EQ CANTIDAD.REGISTROS.MULTIVALOR.X2 THEN
+		TEXTO.ARCHIVO:=SEGMENTO.X2
+		BREAK
+		END
+		TEXTO.ARCHIVO:=SEGMENTO.X2:CHAR(10)
+		
+
+     
+    NEXT J
+*GOSUB ESCRIBIR.ARCHIVO
+
+RETURN
+
+    
+    ESCRIBIR.ARCHIVO:
+	    DIR.NAME= 'MASIVOSAML'
+*	    DIR.NAME='C:\Users\calvarado\Desktop\Proyectos\Creacion masiva de clientes\AML'
+	    NOMBRECSV='ScreenNaturales':'.csv'
+	    R.ID   = NOMBRECSV
+	    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+	    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+	    END
+	    CLOSESEQ SEQ.PTR
+    RETURN
+    
+    
+END

@@ -1,0 +1,572 @@
+*-----------------------------------------------------------------------------
+* <Rating>2276</Rating>
+*-----------------------------------------------------------------------------
+
+;*DICCIONARIO DE VARIABLES
+;*P.NUMERO.ACC     = Numero de Cuenta que ocupara Liberacion de Fondos
+;*P.AMT.SOLOCITADO = Monto por el cual se realizara la Liberacion de Fondos
+;*P.CUSTOMER       = Numero de Cliente
+;*P.ID.TXN         = ID de la transaccion(TFS, FT, TT)
+;*P.AMT.ACC        = Saldo Disponible que tiene la cuenta, al saldo se le debe de restar el monto total bloqueado
+;*P.ID.DETAIL.ER   = ID de la aplicacion Local DETAIL
+;*
+;*
+;*
+;*
+;*
+;*
+;*
+;*
+;*
+;*
+    SUBROUTINE SLV.I.EARLY.RELEASE.START(P.NUMERO.ACC, P.AMT.SOLOCITADO, P.CUSTOMER, P.ID.TXN, P.AMT.ACC, P.ID.DETAIL.ER, P.MONTO.BLOQUEADO, P.AMT.LIBERAR, P.MONTO.LIOF, P.AMT.COMPENSA.TXN, OUT.MONTO.BLOQUEAR, OUT.NO.CHQ, OUT.ARR.CHQ.UTILIZADOS, OUT.ARR.LCK.UTILIZADOS)
+*-----------------------------------------------------------------------------
+*
+* Nombre: SLV.I.EARLY.RELEASE.START
+* Descripción: Rutina que evalua y realiza la Liberacion de Fondos
+*
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+* Autor		      Fecha		 Comentario
+* JHenriquez	15.02.2017	Initial Code
+*-----------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_EQUATE
+    $INSERT I_F.ACCOUNT
+    $INSERT I_F.CUSTOMER
+    $INSERT I_ENQUIRY.COMMON
+    $INSERT I_F.AC.LOCKED.EVENTS
+    $INSERT I_F.CHEQUE.COLLECTION
+    $INSERT I_F.EB.SLV.GLOBAL.PARAM
+    $INSERT I_F.EB.SLV.CUS.EARLY.RELEASE
+    $INSERT I_F.TELLER.FINANCIAL.SERVICES
+    $INSERT I_F.EB.SLV.EARLY.RELEASE.DETAIL
+    $INSERT I_F.FUNDS.TRANSFER
+    $INSERT I_SLV.AMT.LIOF.COMMON
+    $INSERT I_SLV.V.AA.PRUEBA.COMMON
+    $INSERT I_AA.APP.COMMON
+    $INSERT I_F.TFS.TRANSACTION
+    $INSERT I_TSS.COMMON
+    $INSERT I_GTS.COMMON
+*-----------------------------------------------------------------------------
+
+    GOSUB INI
+    GOSUB OPENFILE
+    GOSUB PROCESS
+
+    RETURN
+
+INI:
+
+    FN.ACCOUNT = 'F.ACCOUNT'
+    F.ACCOUNT = ''
+    FN.CUSTOMER = 'F.CUSTOMER'
+    F.CUSTOMER = ''
+
+    FN.LCK.EVT = 'F.AC.LOCKED.EVENTS'
+    F.LCK.EVT =''
+
+    FN.LCK.EVT.HIS = 'F.AC.LOCKED.EVENTS$HIS'
+    F.LCK.EVT.HIS = ''
+
+    FN.TFS = 'F.TELLER.FINANCIAL.SERVICES'
+    F.TFS = ''
+
+    FN.GLOBAL.PARAM = 'F.EB.SLV.GLOBAL.PARAM'
+    F.GLOBAL.PARAM =''
+
+    FN.CHEQUE.COLLECTION = 'F.CHEQUE.COLLECTION'
+    F.CHEQUE.COLLECTION = ''
+
+    FN.EARLY.RELEASE = 'F.EB.SLV.CUS.EARLY.RELEASE'
+    F.EARLY.RELEASE = ''
+
+    FN.EARLY.RELEASE.DETAIL = 'F.EB.SLV.EARLY.RELEASE.DETAIL'
+    F.EARLY.RELEASE.DETAIL = ''
+
+    FN.FUNDS.TRANSFER = 'F.FUNDS.TRANSFER'
+    F.FUNDS.TRANSFER = ''
+
+    FN.CHQ.INAO  = 'F.CHEQUE.COLLECTION$NAU'
+    F.CHQ.INAO = ''
+
+    FN.LCK.INAO = 'F.AC.LOCKED.EVENTS$NAU'
+    F.LCK.INAO = ''
+    
+    FN.TFS.TRANSACTION = 'F.TFS.TRANSACTION'
+    F.TFS.TRANSACTION = ''
+
+    RETURN
+
+OPENFILE:
+    CALL OPF(FN.TFS,F.TFS)
+    CALL OPF(FN.LCK.EVT,F.LCK.EVT)
+    CALL OPF(FN.CUSTOMER, F.CUSTOMER)
+    CALL OPF(FN.GLOBAL.PARAM,F.GLOBAL.PARAM)
+    CALL OPF(FN.EARLY.RELEASE,F.EARLY.RELEASE)
+    CALL OPF(FN.CHEQUE.COLLECTION, F.CHEQUE.COLLECTION)
+    CALL OPF(FN.EARLY.RELEASE.DETAIL,F.EARLY.RELEASE.DETAIL)
+    CALL OPF(FN.FUNDS.TRANSFER,F.FUNDS.TRANSFER)
+    CALL OPF(FN.LCK.EVT.HIS,F.LCK.EVT.HIS)
+    CALL OPF(FN.CHQ.INAO,F.CHQ.INAO)
+    CALL OPF(FN.LCK.INAO,F.LCK.INAO)
+    CALL OPF(FN.TFS.TRANSACTION,F.TFS.TRANSACTION)
+
+    RETURN
+
+PROCESS:
+
+    Y.AMT.LIOF = 0
+    Y.AUTORIZACION = Y.AUTH
+    Y.OFS.SOURCE = OFS$SOURCE.ID
+    Y.APP = APPLICATION 
+    Y.FORMA.PAGO = OUT.NO.CHQ 
+    OUT.NO.CHQ = ''
+
+    Y.NUMERO.CUENTA = P.NUMERO.ACC
+    Y.MONTO.TXN = P.AMT.SOLOCITADO
+    Y.CUSTOMER = P.CUSTOMER
+    Y.AMT.DISP.ACC = P.AMT.ACC
+    Y.ID.DETAIL.ER = P.ID.DETAIL.ER
+    Y.ID.TXN = P.ID.TXN
+    Y.AMT.LIOF =  P.MONTO.LIOF
+    Y.AMT.COMPENSA.TXN =  P.AMT.COMPENSA.TXN
+
+    IF Y.AMT.DISP.ACC EQ 0 THEN
+        Y.AMT.DISP.ACC = P.MONTO.BLOQUEADO
+    END
+
+;*OBTIENDO DATA DE LA LIBERACION EN LA APLICACION
+;*-----------------------------------
+    STMT.CON.LIBERACION = "SELECT ":FN.EARLY.RELEASE:" WITH CUPO.ACCOUNT EQ '":Y.NUMERO.CUENTA:"' AND CUPO.STATUS EQ 'Activo' AND RECORD.STATUS NE INAO"
+    CALL EB.READLIST (STMT.CON.LIBERACION, KEY.LIST.POSEE.LIBERACION,'', NO.RECORD.POSEE.LIBERACION, ERROR.POSEE.LIBERACION)
+
+    CALL F.READ(FN.EARLY.RELEASE,KEY.LIST.POSEE.LIBERACION,RECORD.OBTENER.LIBERACION,F.EARLY.RELEASE,ERR.OBTENER.LIBERACION)
+
+    Y.LIBERACION.ACTIVA = 'Y'
+    Y.MONTO.DISPONIBLE.ER = RECORD.OBTENER.LIBERACION<EB.SLV43.CUPO.AMT.DISPO>
+    Y.COMISION = (RECORD.OBTENER.LIBERACION<EB.SLV43.COMMISSION>/100)
+    Y.ID.ER = KEY.LIST.POSEE.LIBERACION
+
+;*OBTENIENDO SI EL CLIENTE ES EXENTO DE IVA
+    Y.IVA = '0'
+    CALL SLV.V.EXENTO.IVA.ER(Y.CUSTOMER,Y.OUT.IVA)
+    Y.EXENTO.IVA = Y.OUT.IVA
+
+    CALL F.READ(FN.GLOBAL.PARAM,'IVA.ER',RECORD.ER.IVA,F.GLOBAL.PARAM,ERRO.ER)
+    Y.IVA = RECORD.ER.IVA<EB.SLV39.VALOR.PARAM>
+
+;*VALIDACIONES PARA LIBERACION DE FONDOS
+;*---------------------------------------
+
+    GOSUB FONDOS.MINIMOS.ACC
+
+    IF Y.POSEE.FONDO.MINIMO EQ 'Y' THEN
+
+        ;*OBTENER CHEQUES EN COMPENSACION
+        ;*------------------------------------------
+        GOSUB GET_CHEQUE.COMPENSA
+
+        ;*OBTENER LOS FONDOS BLOQUEADOS CON RELACION A LA LIBERACION
+        ;*----------------------------------------------------------
+        GOSUB GET_LOCKED_EVENTS
+
+        GOSUB REALIZAR.LIBERACION
+
+    END
+    RETURN
+
+FONDOS.MINIMOS.ACC:
+    Y.FONDO.MINIMO.COMISION = '0'
+
+    IF Y.COMISION GT '0' THEN
+
+        IF Y.EXENTO.IVA EQ 'NO' THEN
+           Y.FONDO.MINIMO.COMISION = DROUND ((Y.MONTO.TXN * Y.COMISION) * (1 + Y.IVA),2)
+        END
+        ELSE
+        	Y.FONDO.MINIMO.COMISION = DROUND ((Y.MONTO.TXN * Y.COMISION),2)
+    	END
+
+    	CALL F.READ(FN.GLOBAL.PARAM,'COMMISSION.MINIMA.ER',RECORD.COMISION,F.GLOBAL.PARAM,ERROR.COMISION)
+
+    	IF Y.FONDO.MINIMO.COMISION LT RECORD.COMISION<EB.SLV39.VALOR.PARAM> THEN
+
+	        IF Y.EXENTO.IVA EQ 'NO' THEN
+	            Y.FONDO.MINIMO.COMISION = DROUND(RECORD.COMISION<EB.SLV39.VALOR.PARAM> * (1 + Y.IVA),2)
+	        END
+	        ELSE
+	        	Y.FONDO.MINIMO.COMISION = RECORD.COMISION<EB.SLV39.VALOR.PARAM>
+	    	END
+    	END
+    END
+;*POSEE FONDOS MINIMOS EN CUENTA Y EN CUPO DE LIBERACION
+;*------------------------------
+	IF Y.FONDO.MINIMO.COMISION LE Y.AMT.DISP.ACC THEN
+    	Y.POSEE.FONDO.MINIMO = 'Y'
+
+        ;*SE CALCULA EL MONTO REAL DE LA CUENTA, RESTANDOLE EL FONDO MINIMO PARA EL PAGO DE (COMISION E IVA)
+        ;*--------------------------------------------------------------------------------------------------------
+
+        Y.AMT.DISP.ACC.REAL = DROUND(Y.AMT.DISP.ACC - Y.FONDO.MINIMO.COMISION - Y.AMT.LIOF,2);*AGREGAR MONTO LIOF
+
+        IF Y.AMT.COMPENSA.TXN EQ 0 OR Y.AMT.COMPENSA.TXN EQ '' OR Y.AMT.COMPENSA.TXN EQ ' '  THEN
+            Y.AMT.COMPENSA.TXN = 0
+            Y.MONTO.SOLICITADO = Y.MONTO.TXN - Y.AMT.DISP.ACC.REAL
+        END
+        ELSE
+	        Y.AMT.COMPENSA.TXN = Y.AMT.DISP.ACC.REAL
+	        Y.MONTO.SOLICITADO = Y.MONTO.TXN
+    	END
+		P.AMT.LIBERAR = Y.MONTO.SOLICITADO
+		;*VERIFICANDO SI POSEE EL MONTO PARA EL COBRO DE LIOF
+		;*---------------------------------------------------
+	    IF Y.MONTO.SOLICITADO LT 0 AND P.MONTO.BLOQUEADO GT 1 THEN
+	        Y.MONTO.SOLICITADO = Y.MONTO.TXN
+	    END
+
+	    IF Y.MONTO.SOLICITADO GT Y.MONTO.DISPONIBLE.ER THEN
+	        ETEXT = 'EB-SLV.AMT.ER'
+	        AF = TFS.OVERRIDE
+	        AV = 1
+	        CALL STORE.END.ERROR
+	    END
+	END
+    ELSE
+	    ETEXT = 'EB-SLV.AMT.ER'
+	    AF = TFS.OVERRIDE
+	    AV = 1
+	    CALL STORE.END.ERROR
+    END
+
+    RETURN
+
+COBRO.COMISION.IVA:
+    Y.VALOR.COMISION = 0
+    Y.VALOR.COMISION = DROUND(Y.MONTO.SOLICITADO * Y.COMISION,2)
+
+	CALL SLV.V.EXENTO.IVA.ER(Y.CUSTOMER,Y.OUT.IVA)
+    Y.EXENTO.IVA = Y.OUT.IVA
+    
+    ;*VERIFICAR SI EL MONTO DE LA COMISION NO ES MENOR AL MONTO MINIMO DE LA COMISION ESTABLECIDO EN PARAMENTRO
+	;*----------------------------------------------------------------------------------------------------------
+    CALL F.READ(FN.GLOBAL.PARAM,'COMMISSION.MINIMA.ER',RECORD.COMISION,F.GLOBAL.PARAM,ERROR.COMISION)
+    
+    IF Y.VALOR.COMISION GT 0 THEN   
+        IF Y.VALOR.COMISION LT RECORD.COMISION<EB.SLV39.VALOR.PARAM> THEN
+        
+            Y.VALOR.COMISION = DROUND(RECORD.COMISION<EB.SLV39.VALOR.PARAM>,2) 
+            
+           	;*IF Y.EXENTO.IVA EQ 'NO' THEN
+           	;*	Y.VALOR.COMISION = DROUND(RECORD.COMISION<EB.SLV39.VALOR.PARAM> * (1 + Y.IVA),2)
+       		;*END
+       		;*ELSE
+       		;*	Y.VALOR.COMISION = RECORD.COMISION<EB.SLV39.VALOR.PARAM>
+       		;*END
+        END
+        ;*ELSE
+        ;*   	IF Y.EXENTO.IVA EQ 'NO' THEN
+        ;*   		Y.VALOR.COMISION = DROUND(Y.VALOR.COMISION * (1 + Y.IVA),2)
+       	;*	END
+       	;*	ELSE
+       	;*		Y.VALOR.COMISION = Y.VALOR.COMISION
+       	;*	END
+        ;*END
+    END
+    
+    ;*GENERAR FACTURAR
+	;*----------------
+    BEGIN CASE
+        CASE Y.VALOR.COMISION GT 0
+            CALL SLV.I.OFS.DOC.FISCAL.ER(Y.NUMERO.CUENTA, Y.VALOR.COMISION, Y.CUSTOMER, Y.ID.TXN, Y.ID.CHQ.COLL)
+    END CASE
+ 
+    RETURN
+    
+    
+
+GET_CHEQUE.COMPENSA:
+    ARR.CHQ.COMPENSA.ER = ''
+    Y.MONTO.CHQ.COMPENSA = '0'
+
+;*Extraer Todos los Registros Provenientes de Cheque Colleccion
+;*-------------------------------------------------------------
+    SELECT.STMT = "SELECT " : FN.CHEQUE.COLLECTION : " WITH CHQ.STATUS EQ DEPOSITED AND TXN.CODE EQ 92 AND CREDIT.ACC.NO EQ '":Y.NUMERO.CUENTA: "'"
+;*SELECT.STMT = "SELECT " : FN.CHEQUE.COLLECTION : " WITH CREDIT.ACC.NO EQ '":Y.NUMERO.CUENTA: "'"
+
+;*Aplicando Busqueda por Criterio
+;*-------------------------------
+    CALL EB.READLIST(SELECT.STMT, ID.LIST,'', NO.OF.RECS, ERR.LIST)
+;*Recorrer y Extraer
+;*------------------
+    FOR J = 1 TO NO.OF.RECS
+        STR.MOV = ''
+        FIND ID.LIST<J> IN OUT.ARR.CHQ.UTILIZADOS SETTING Ap,Vp ELSE
+        CALL F.READ (FN.CHEQUE.COLLECTION, ID.LIST<J>, R.CHQ.COL, F.CHEQUE.COLLECTION, ERR.CHQ.COL)
+
+        CALL F.READ (FN.CHQ.INAO, ID.LIST<J>, RECORD.CHQ.INAO, F.CHQ.INAO, ERRO.CHQ.INAO)
+        IF RECORD.CHQ.INAO EQ '' THEN
+            ;*Construccion de Arreglo
+            ;*-----------------------
+            STR.MOV := ID.LIST<J> 	                        : VM	;* 1
+            STR.MOV := R.CHQ.COL<CHQ.COL.AMOUNT>			: VM	;* 2
+            STR.MOV := R.CHQ.COL<CHQ.COL.CHEQUE.NO>			: VM	;* 3
+            STR.MOV := R.CHQ.COL<CHQ.COL.EXPOSURE.DATE>     : VM    ;* 4
+
+            ;*Almacenar Arreglo en ARR.CHQ.COMPENSA.ER
+            ;*-----------------------------
+            ARR.CHQ.COMPENSA.ER<-1> = STR.MOV
+            Y.MONTO.CHQ.COMPENSA = Y.MONTO.CHQ.COMPENSA + R.CHQ.COL<CHQ.COL.AMOUNT>
+        END
+    END
+    NEXT J
+    RETURN
+
+GET_LOCKED_EVENTS:
+    Y.AMT.BLOQUEADO.ER = 0
+    ARR.LCK.EVT.ER = ''
+;*Extraer Todos los Registros Provenientes de Locked Events Generados por Liberacion Anticipada en Cheque Collection
+;*------------------------------------------------------------------------------------------------------------------
+    STMT.ER.DETAIL = "SELECT ": FN.EARLY.RELEASE.DETAIL: " WITH LINK.APP.ID.ER EQ ":Y.ID.ER
+    CALL EB.READLIST (STMT.ER.DETAIL,LIST.STMT.ER.DETAIL,'', NO.RECORD.STMT.ER.DETAIL,ERR.STMT.ER.DETAIL)
+
+    FOR J = 1 TO NO.RECORD.STMT.ER.DETAIL
+
+        CALL F.READ(FN.LCK.INAO, LIST.STMT.ER.DETAIL<J>, RECORD.LCK.INAO, F.LCK.INAO, ERROR.LCK.INAO)
+        IF RECORD.LCK.INAO EQ '' THEN
+            CALL F.READ(FN.EARLY.RELEASE.DETAIL,LIST.STMT.ER.DETAIL<J>,RECORD.ER.DETAIL,F.EARLY.RELEASE.DETAIL,ERR.ER.DETAIL)
+
+            IF RECORD.ER.DETAIL THEN
+                ;*OBTENIENDO SI EL CAMPO LCK.EVT DE EARLY.RELEASE.DETAIL ES MULTIVALOR
+                ;*-------------------------------------------------------------------
+                LCK.EVT.ER.DETAIL = RECORD.ER.DETAIL<EB.SLV44.LCK.EVT>
+                CONTADOR.LCK.EVT.ER.DETAIL = DCOUNT(LCK.EVT.ER.DETAIL,VM)
+
+                FOR H = 1 TO CONTADOR.LCK.EVT.ER.DETAIL
+                    STR.LCK.EVT.ER = ''
+                    RECORD.LCK.EVT = ''
+
+                    CALL F.READ(FN.LCK.EVT,RECORD.ER.DETAIL<EB.SLV44.LCK.EVT,H,1>,RECORD.LCK.EVT,F.LCK.EVT,ERR.LCK.EVT)
+
+                    IF RECORD.LCK.EVT THEN
+                        FIND RECORD.ER.DETAIL<EB.SLV44.LCK.EVT,H,1> IN OUT.ARR.LCK.UTILIZADOS SETTING Ap,Vp ELSE
+
+                        ;*CALL F.READ(FN.LCK.EVT.HIS,RECORD.ER.DETAIL<EB.SLV44.LCK.EVT,H,1>,RECORD.LCK.EVT,F.LCK.EVT.HIS,ERR.LCK.EVT)
+                        ;*Construccion de Arreglo
+                        ;*-----------------------
+                        STR.LCK.EVT.ER := RECORD.ER.DETAIL<EB.SLV44.LCK.EVT,H,1>           : VM	;* 1
+                        STR.LCK.EVT.ER := RECORD.LCK.EVT<AC.LCK.LOCKED.AMOUNT>			   : VM	;* 2
+
+                        ;*Almacenar Arreglo en ARR.LCK.EVT.ER
+                        ;*-----------------------------------
+                        ARR.LCK.EVT.ER<-1> = STR.LCK.EVT.ER
+                        Y.AMT.BLOQUEADO.ER = Y.AMT.BLOQUEADO.ER + RECORD.LCK.EVT<AC.LCK.LOCKED.AMOUNT>
+                    END
+                END
+            NEXT H
+        END
+    END
+    NEXT J
+    RETURN
+
+REALIZAR.LIBERACION:
+
+    Y.AMT.BLOQUEADO.ER = Y.AMT.BLOQUEADO.ER + Y.AMT.COMPENSA.TXN
+    Y.SUMA.LCK.EVT = Y.AMT.COMPENSA.TXN
+;*SI UNA TXN HA LIBERADO UN CHEQUE Y NO OCUPO TODOS LOS FONDOS SE EVALUA LOS FONDOS RESTANTES
+;*--------------------------------------------------------------------------------------------
+    Y.LINK.APP.CHQ.COL = 0
+    Y.BANDERA.CHQ = 1
+
+    IF Y.MONTO.SOLICITADO LE Y.AMT.COMPENSA.TXN THEN
+        OUT.MONTO.BLOQUEAR =  Y.AMT.COMPENSA.TXN - Y.MONTO.SOLICITADO
+        ;*GOSUB COBRO.COMISION.IVA
+    END
+;*LIBERACION DE FONDOS (DESBLOQUEDO DE FONDOS Y BLOQUEO DE FONDOS NO UTILIZADOS)
+;*-------------------------------------------------------------------------------
+    ELSE IF Y.MONTO.SOLICITADO LE Y.AMT.BLOQUEADO.ER THEN
+    Y.SUMA.LCK.EVT = '0'
+    TAMANIO.ARR.LCK = DCOUNT(ARR.LCK.EVT.ER,FM)
+
+    FOR D=1 TO TAMANIO.ARR.LCK
+        STR.DESBLOQUEAR = ''
+        Y.SUMA.LCK.EVT = Y.SUMA.LCK.EVT + ARR.LCK.EVT.ER<D,2>
+
+        ;*FORMANDO ARREGLO DE LOS REGISTROS A DESBLOQUEAR
+        ;*-----------------------------------------------
+        STR.DESBLOQUEAR := ARR.LCK.EVT.ER<D,1>   :VM ;*ID AC.LOCKED.EVENT
+        STR.DESBLOQUEAR := ARR.LCK.EVT.ER<D,2>   :VM ;*MONTO
+        ARR.DESBLOQUEAR<-1> =  STR.DESBLOQUEAR
+
+        IF Y.SUMA.LCK.EVT GE Y.MONTO.SOLICITADO AND Y.BANDERA.CHQ EQ 1 THEN
+            Y.BANDERA.CHQ = 2
+            RECORD.LCK.ER = 0
+            Y.ID.LCK = 0
+            Y.LINK.APP.CHQ.COL = 0
+
+            ;*OFS PARA DESBLOQUEAR FONDOS
+            ;*---------------------------
+            Y.TAMANIO.ARR.DESBLOQUEAR = DCOUNT(ARR.DESBLOQUEAR,FM)
+
+            ;*Se consulta el id del cheque que tiene asociado el bloqueo, para identificar
+            ;*si el cheque todavia posee dinero bloqueado
+            ;*-----------------------------------------------------------------------------
+            Y.ID.LCK = ARR.DESBLOQUEAR<Y.TAMANIO.ARR.DESBLOQUEAR,1>
+
+            CALL F.READ(FN.LCK.EVT,Y.ID.LCK,RECORD.LCK.ER,F.LCK.EVT,ERRO.LCK)
+            CALL GET.LOC.REF ('AC.LOCKED.EVENTS','LF.ID.CHQ.COL',PosChqCol)
+
+            IF RECORD.LCK.ER THEN
+                Y.LINK.APP.CHQ.COL = RECORD.LCK.ER<AC.LCK.LOCAL.REF,PosChqCol>
+            END
+            ELSE
+	            CALL F.READ(FN.LCK.EVT.HIS,Y.ID.LCK,RECORD.LCK.HIS,F.LCK.EVT.HIS,ERR.LCK.HIS)
+	            Y.LINK.APP.CHQ.COL = RECORD.LCK.HIS<AC.LCK.LOCAL.REF,PosChqCol>
+        	END
+        	
+        	OUT.NO.CHQ = Y.LINK.APP.CHQ.COL
+
+        FOR COUNT.DESBLO = 1 TO Y.TAMANIO.ARR.DESBLOQUEAR
+            ;*Ejecutando OFS Reversa de bloqueo
+            ;*---------------------------------
+            CALL SLV.I.OFS.REVERSE.LCK.ER(ARR.DESBLOQUEAR<COUNT.DESBLO,1>,0)
+            OUT.ARR.LCK.UTILIZADOS<-1> = ARR.DESBLOQUEAR<COUNT.DESBLO,1>
+            CALL F.READ(FN.LCK.EVT, ARR.DESBLOQUEAR<COUNT.DESBLO,1>, RECORD.LCK.EVT, F.LCK.EVT, ERROR.LCK)
+            
+        NEXT COUNT.DESBLO
+        
+        ;*OFS BLOQUEAR LOS FONDOS NO UTILIZADOS
+        ;*-------------------------------------
+        Y.MONTO.BLOQUEAR = Y.SUMA.LCK.EVT - Y.MONTO.SOLICITADO
+        IF Y.MONTO.BLOQUEAR GT '0' THEN
+            ;*CALL SLV.I.OFS.LOCKED.FUNDS.ER(Y.NUMERO.CUENTA,Y.MONTO.BLOQUEAR,Y.ID.DETAIL.ER,Y.MONTO.SOLICITADO,Y.ID.ER,0,Y.OUT.LCK,Y.LINK.APP.CHQ.COL)
+            OUT.MONTO.BLOQUEAR = Y.MONTO.BLOQUEAR
+        END
+        IF Y.MONTO.BLOQUEAR EQ '0' THEN
+            OUT.MONTO.BLOQUEAR = 1
+        END
+
+        ;*GOSUB COBRO.COMISION.IVA
+
+        RETURN
+    END
+    NEXT D
+    END
+    ELSE
+;*OPCION 2
+;*--------
+;*LIBERACION DE FONDOS (LIBERACION DE CHEQUES,DESBLOQUEO DE FONDOS,BLOQUEO DE FONDOS NO UTILIZADOS)
+;*-------------------------------------------------------------------------------------------------
+    Y.SUMA.CHQ.LCK = Y.AMT.BLOQUEADO.ER
+    Y.NO.CHQ.COMPENSA = DCOUNT(ARR.CHQ.COMPENSA.ER,FM)
+    Y.BANDERA.CHQ = 1
+;*SE RECORRE CADA FILA DEL ARREGLO DE CHEQUES EN COMPENSA Y EL MONTO SUMARLO CON EL MONTO BLOQUEADO
+;*PARA OBTENER EL NUMERO DE LOS CHEQUES EN COMPENSA A UTILIZAR
+;*--------------------------------------------------------------------------------------------------
+    FOR CHQ.COM = 1 TO Y.NO.CHQ.COMPENSA
+
+        ;*AGREGANDO CHEQUES SELECCIONADOS PARA LIBERACION
+        ;*-----------------------------------------------
+        ARR.LCK.CHQ.SELEC = ''
+        STR.CHQ.COMPEN.SELEC := ARR.CHQ.COMPENSA.ER<CHQ.COM,1>   :VM ;*ID CHEQUE COLLECTION
+        STR.CHQ.COMPEN.SELEC := ARR.CHQ.COMPENSA.ER<CHQ.COM,2>   :VM ;*MONTO
+        STR.CHQ.COMPEN.SELEC := ARR.CHQ.COMPENSA.ER<CHQ.COM,3>   :VM ;*#CHEQUE
+        STR.CHQ.COMPEN.SELEC := ARR.CHQ.COMPENSA.ER<CHQ.COM,4>   :FM ;*EXPOSURE DATE
+        ARR.LCK.CHQ.SELEC<-1> = STR.CHQ.COMPEN.SELEC
+
+        Y.SUM.CHQ = DROUND(Y.SUM.CHQ + ARR.CHQ.COMPENSA.ER<CHQ.COM,2>,2)
+        Y.SUMA.CHQ.LCK = Y.SUMA.CHQ.LCK + ARR.CHQ.COMPENSA.ER<CHQ.COM,2>
+
+        IF  Y.SUMA.CHQ.LCK GE Y.MONTO.SOLICITADO AND Y.BANDERA.CHQ EQ 1 THEN
+            Y.BANDERA.CHQ = 2
+            Y.MONTO.BLOQUEAR = Y.SUMA.CHQ.LCK- Y.MONTO.SOLICITADO
+
+            ;*OFS LIBERACION DE CHEQUES
+            ;*-------------------------
+            Y.COUNT.ARR.CHQ = DCOUNT(ARR.LCK.CHQ.SELEC,FM) - 1
+            FOR CH = 1 TO Y.COUNT.ARR.CHQ
+                FINDSTR 'TCIBCORP' IN Y.OFS.SOURCE SETTING Ap,Vp THEN
+   		 			CALL SLV.I.OFS.LIBERAR.CHQ.COMPENSA(ARR.LCK.CHQ.SELEC<CH,1>)
+    			END
+    			ELSE
+    			  FINDSTR 'TCIB' IN Y.OFS.SOURCE SETTING Ap,Vp THEN
+   		 			CALL SLV.I.OFS.LIBERAR.CHQ.COMPENSA.FT(ARR.LCK.CHQ.SELEC<CH,1>)
+    			  END
+    			  ELSE
+	    			  IF Y.APP EQ 'FUNDS.TRANSFER' THEN
+	    			    CALL SLV.I.OFS.LIBERAR.CHQ.COMPENSA.FT(ARR.LCK.CHQ.SELEC<CH,1>)
+	    			  END
+	    			  ELSE
+		    			  IF Y.FORMA.PAGO EQ 'DepChPropio' OR Y.FORMA.PAGO EQ 'PagoChPropioTrc' OR Y.FORMA.PAGO EQ 'PagoChPropio' THEN
+			    			    CALL F.READ(FN.TFS.TRANSACTION, Y.FORMA.PAGO, RECORD.TFS.TRANSACTION, F.TFS.TRANSACTION, ERROR.TFS.TRANSACTION)
+			    			    Y.LIMIT.CAJA = RECORD.TFS.TRANSACTION<TFS.TXN.LCY.LIMIT>
+			    			    IF Y.MONTO.TXN GT Y.LIMIT.CAJA THEN
+			    			    	CALL SLV.I.OFS.LIBERAR.CHQ.COMPENSA(ARR.LCK.CHQ.SELEC<CH,1>)
+			    			    END
+			    			    ELSE
+			    			        CALL SLV.I.OFS.LIBERAR.CHQ.COMPENSA.FT(ARR.LCK.CHQ.SELEC<CH,1>)
+			    			        GOSUB COBRO.COMISION.IVA
+			    			    END
+			    		  END	    
+		    		  	  ELSE
+	    			  		    CALL SLV.I.OFS.LIBERAR.CHQ.COMPENSA(ARR.LCK.CHQ.SELEC<CH,1>)
+	    			  	  END
+	                  END    			
+	              END    
+    			END
+    			
+                OUT.ARR.CHQ.UTILIZADOS<-1> =  ARR.LCK.CHQ.SELEC<CH,1>
+                IF CH EQ  Y.COUNT.ARR.CHQ THEN
+                    IF Y.SUMA.CHQ.LCK NE Y.MONTO.SOLICITADO THEN
+                        Y.LINK.APP.CHQ.COL = ARR.LCK.CHQ.SELEC<CH,1>
+                        OUT.NO.CHQ = Y.LINK.APP.CHQ.COL
+                    END
+                END
+            NEXT CH
+
+            IF Y.SUMA.CHQ.LCK EQ Y.MONTO.SOLICITADO THEN
+                Y.LIB.PARCIAL = 'N'
+            END
+            ELSE
+            Y.LIB.PARCIAL = 'Y'
+        END
+
+        ;*GUARDANDO EL DETALLE DE LA LIBERACION DE LOS CHEQUES
+        ;*-----------------------------------------------------
+        CALL SLV.I.CHQ.ER.DETAIL(Y.NUMERO.CUENTA,Y.ID.TXN,Y.MONTO.SOLICITADO,ARR.LCK.CHQ.SELEC,Y.ID.ER,Y.ID.DETAIL.ER,Y.MONTO.BLOQUEAR,Y.LIB.PARCIAL)
+
+        ;* OFS LIBERACION DE LOS FONDOS BLOQUEADOS
+        ;*----------------------------------------
+        TAMAIO.ARR.LCK = DCOUNT(ARR.LCK.EVT.ER,FM)
+        FOR D=1 TO TAMAIO.ARR.LCK
+            CALL SLV.I.OFS.REVERSE.LCK.ER(ARR.LCK.EVT.ER<D,1>,0)
+            OUT.ARR.LCK.UTILIZADOS<-1> = ARR.LCK.EVT.ER<D,1>
+        NEXT D
+
+        ;*OFS BLOQUEAR LOS FONDOS NO UTILIZADOS
+        ;*-------------------------------------
+        IF Y.MONTO.BLOQUEAR GT '0' THEN
+            ;*CALL SLV.I.OFS.LOCKED.FUNDS.ER(Y.NUMERO.CUENTA,Y.MONTO.BLOQUEAR,P.ID.DETAIL.ER,Y.MONTO.SOLICITADO,Y.ID.ER,ARR.LCK.CHQ.SELEC,Y.OUT.LCK,Y.LINK.APP.CHQ.COL)
+            OUT.MONTO.BLOQUEAR = Y.MONTO.BLOQUEAR
+        END
+        IF Y.MONTO.BLOQUEAR EQ '0' THEN
+            OUT.MONTO.BLOQUEAR = 1
+        END
+
+        ;*GOSUB COBRO.COMISION.IVA
+    END
+    NEXT CHQ.COM
+    END
+;*ACTUALIZANDO DATA CUPO DE LIBERACION
+;*-------------------------------------
+    CALL SLV.I.UPDATE.ER(Y.MONTO.SOLICITADO,Y.ID.ER)
+    RETURN
+
+CRT_ERROR:
+    CURRNO = DCOUNT(R.NEW(FT.OVERRIDE),VM) + 1
+    CALL STORE.OVERRIDE(CURRNO)
+    RETURN
+
+
+    END

@@ -1,0 +1,124 @@
+SUBROUTINE SLV.CONTRATO.BANCA.MASIVO
+*-----------------------------------------------------------------------------
+*-----------------------------------------------------------------------------
+* <Rating>-65</Rating>
+*-----------------------------------
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_EQUATE
+    $INSERT I_F.EB.SLV.ITEMS.MASIVOS
+    $INSERT I_F.AA.ARRANGEMENT
+    $INSERT I_F.EB.SLV.MASTER.MASIVOS
+    $INSERT I_ENQUIRY.COMMON
+    $INSERT I_F.AA.ARRANGEMENT.ACTIVITY
+    $INSERT I_DAS.AA.ARRANGEMENT.ACTIVITY
+    $INSERT I_DAS.EB.EXTERNAL.USER
+    $INSERT I_F.EB.SLV.GENERACION.DOC
+    
+*-----------------------------------------------------------------------------
+
+    GOSUB INIT
+    GOSUB OPEN.FILE
+    GOSUB GET.FILTER.VALUE
+    GOSUB PROCESS
+    RETURN
+
+INIT:
+    FN.ITEMS.MASIVOS  = 'F.EB.SLV.ITEMS.MASIVOS'
+    F.ITEMS.MASIVOS   = ''
+    FN.AA.ARRANGEMENT = 'F.AA.ARRANGEMENT'
+    F.AA.ARRANGEMENT  = ''
+    FN.MASTER.MASIVOS = 'F.EB.SLV.MASTER.MASIVOS'
+    F.MASTER.MASIVOS  = ''
+    FN.ARR='F.AA.ARRANGEMENT.ACTIVITY'
+    F.ARR=''
+    
+    EQU ESTADO.MASTER.MASIVOS TO 'CUENTAS.CREADAS'
+    RETURN
+
+OPEN.FILE:
+    CALL OPF(FN.ITEMS.MASIVOS,F.ITEMS.MASIVOS)
+    CALL OPF(FN.AA.ARRANGEMENT,F.AA.ARRANGEMENT)
+    CALL OPF(FN.MASTER.MASIVOS,F.MASTER.MASIVOS)
+    CALL OPF(FN.ARR,F.ARR)
+    RETURN
+
+GET.FILTER.VALUE:
+	ID.CARGA.MASIVA ='BKML1559930226517'
+    RETURN
+
+PROCESS:
+
+    ;*OBTENEMOS EL DETALLE DEL REGISTRO EN LA APLICACION EB.SLV.MASTER.MASIVOS
+    CALL F.READ(FN.MASTER.MASIVOS,ID.CARGA.MASIVA,R.MASTER,F.MASTER.MASIVOS,ERR.MASTER)
+    
+    IF R.MASTER<EB.SLV32.ESTADO> NE ESTADO.MASTER.MASIVOS THEN
+      RETURN
+    END
+    
+    STMT.ITEMS.MASIVOS = "SELECT ":FN.ITEMS.MASIVOS:" WITH @ID LIKE '":ID.CARGA.MASIVA:"...' "
+    CALL EB.READLIST (STMT.ITEMS.MASIVOS, KEY.LIST, '', ITEMS.COUNT, SYSTEM.RETURN.CODE)
+
+    LOOP
+        REMOVE ITEM.ID FROM KEY.LIST SETTING POS.ID
+    WHILE ITEM.ID NE ''
+        CALL F.READ(FN.ITEMS.MASIVOS,ITEM.ID,R.ITEM,F.ITEMS.MASIVOS,ITEM.ERR)
+        ARRANGEMENT.ID = R.ITEM<EB.SLV3.ACCOUNT>
+        CUSTOMER.ID    = R.ITEM<EB.SLV3.ID.CUSTOMER>
+        ;*OBTENEMOS EL DETALLE DEL ARRANGEMENT
+        CALL F.READ(FN.AA.ARRANGEMENT,ARRANGEMENT.ID,R.ARRANGEMENT,F.AA.ARRANGEMENT,ERR.ARRANGEMENT)
+               ;*Generar ContratoBanca
+        GOSUB OBTENER.ARR.BANCA
+        NOM.CONT='CBMSV-':ID.CARGA.MASIVA:'-':CUSTOMER.ID
+                
+        IF AA.ARR.ID NE '' THEN
+	        IF AA.ARR.ID THEN     
+	                
+	    	CALL SLV.E.NOF.TC.CONTRATO.MAS(AA.ARR.ID,NOM.CONT)    
+	        	        
+	        END
+	        
+        END
+        
+    REPEAT
+    A.INFO = 'OK':'*':'OK':'*':'OK'
+    RETURN
+    
+    
+  OBTENER.ARR.BANCA:
+
+    THE.ARGS = CUSTOMER.ID
+    SEL.LIST = DAS$CUSARRANGEMENT
+    CALL DAS('AA.ARRANGEMENT.ACTIVITY',SEL.LIST,THE.ARGS,TABLE.SUFFIX)
+    IF SEL.LIST THEN
+        CALL F.READ(FN.ARR,SEL.LIST,REC.ARR,F.ARR,REC.ERROR)
+        IF REC.ARR THEN
+            ;*Id Isa
+            AA.ARR.ID=REC.ARR<AA.ARR.ACT.ARRANGEMENT>
+
+            ;*Estado del Acuerdo de banca en linea
+            Y.STATUS.ARR = REC.ARR<AA.ARR.ACT.RECORD.STATUS>
+            ;* Verificar el estado del Acuerdo de banca en línea para el cliente.
+            IF Y.STATUS.ARR EQ 'INAU' THEN
+                Y.MSG.ERROR = 'EB-SLV.ARR.STATUS'
+                AA.ARR.ID=''
+
+            END
+      END
+END
+  RETURN
+    
+    
+ESCRIBIR.ARCHIVO:
+	    DIR.NAME= 'MASIVOS'
+	    R.ID   = 'Cuentas.txt'
+	    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+	    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+	    END
+	    CLOSESEQ SEQ.PTR
+    RETURN
+
+    END

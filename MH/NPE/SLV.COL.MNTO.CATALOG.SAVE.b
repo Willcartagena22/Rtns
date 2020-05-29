@@ -1,0 +1,96 @@
+*-----------------------------------------------------------------------------
+* <Rating>-56</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.COL.MNTO.CATALOG.SAVE
+*-----------------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+$INSERT I_COMMON
+$INSERT I_EQUATE
+$INSERT I_F.EB.SLV.COL.MNTO.CATALOG
+*-----------------------------------------------------------------------------
+
+GOSUB INICIALIZAR
+GOSUB OPENFILE
+GOSUB PROCESS
+
+RETURN
+
+INICIALIZAR:
+    FN.MNTO.CATALOG	= 'F.EB.SLV.COL.MNTO.CATALOG'
+    F.MNTO.CATALOG	= ''
+
+    RETURN
+
+OPENFILE:
+    CALL OPF(FN.MNTO.CATALOG, F.MNTO.CATALOG)
+    
+    RETURN
+
+PROCESS:
+	ID.CATALOGO = R.NEW(EB.SLV67.ID.CATALOGO)
+	NOMBRE.CATALOGO = R.NEW(EB.SLV67.NOMBRE.CATALOGO)
+	TRAMA.ENVIO = ID.CATALOGO:'~':NOMBRE.CATALOGO
+	
+	TRAMA.ENVIO := '@'
+	;* ARMAR EL LISTADO DE ITEMS
+	CODIGOS.ITEMS = R.NEW(EB.SLV67.CODIGO.ITEM)
+	TOTAL.ITEMS = DCOUNT(CODIGOS.ITEMS,VM)
+	
+	FOR I = 1 TO TOTAL.ITEMS
+		TRAMA.ENVIO := FIELD(R.NEW(EB.SLV67.CODIGO.ITEM),VM,I)
+		TRAMA.ENVIO := '~':FIELD(R.NEW(EB.SLV67.VALOR.ITEM),VM,I)
+		TRAMA.ENVIO := '~':FIELD(R.NEW(EB.SLV67.ESTATUS.ITEM),VM,I)
+		TRAMA.ENVIO := '@'
+	NEXT I
+	
+	;* GUARDAR EN EL ARCHIVO LOG, LO QUE SE ENVIA AL MODULO
+	TEXTO.ARCHIVO = TRAMA.ENVIO
+	GOSUB ESCRIBIR.ARCHIVO
+	
+	;*ASIGNACION DE PARAMETROS PARA EL CALLJ
+    THIS.PACKAGE.CLASS ="com.bancoazul.collector.Collector";* "com.bancoazul.t24colecturia.ColectorPEXMWS"
+    THIS.METHOD.CLT= "setCatalog"
+    CALLJ.ARGUMENTS.CLT = TRAMA.ENVIO
+    CALLJ.ERROR.SMS = " "
+    CALLJ.RESPONSE.CLT = " "
+	
+	;*LLAMADA AL METODO CALLJ
+    CALL EB.CALLJ(THIS.PACKAGE.CLASS,THIS.METHOD.CLT,CALLJ.ARGUMENTS.CLT,CALLJ.RESPONSE.CLT,CALLJ.ERROR.CLT)
+    
+    ;* GUARDAR EN EL ARCHIVO LOG, LO QUE SE RECIBE DEL MODULO
+    TEXTO.ARCHIVO = CALLJ.RESPONSE.CLT
+	GOSUB ESCRIBIR.ARCHIVO
+	
+	INDICADOR.RESPUESTA = FIELD(TEXTO.ARCHIVO,'|',2)
+	
+	IF INDICADOR.RESPUESTA EQ 'OK' THEN
+		STRERR = 'REGISTROS GUARDADOS EXITOSAMENTE'
+	END
+	ELSE
+		STRERR = 'ERROR NO SE PUDO COMPLETAR EL REGISTRO'
+	END 
+	
+	RETURN
+
+ESCRIBIR.ARCHIVO:
+    DIR.NAME= 'MHLogs'
+    R.ID = 'MNTO.CATALOG.SAVE.':TODAY:'.txt'
+	;* hacer que escriba un archivo
+
+    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+    END
+    
+    CLOSESEQ SEQ.PTR
+    RETURN
+
+CRT_ERROR:
+    ETEXT = STRERR
+    AS = 1
+   	CALL STORE.END.ERROR
+    RETURN 
+
+END

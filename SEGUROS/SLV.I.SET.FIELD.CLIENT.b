@@ -1,0 +1,246 @@
+*------------------------------------------------------------------------------------------
+* <Rating>-57</Rating>
+*------------------------------------------------------------------------------------------
+    SUBROUTINE SLV.I.SET.FIELD.CLIENT(VAR.CUSTOMER.ID,VAR.ASEGURADO,VAR.MEDIO.PAGO,CAMPO.VALIDAR)
+*------------------------------------------------------------------------------------------
+* RUTINA QUE REALIZA CAMBIOS AL COMPORTAMIENTO DE LOS CAMPOS DE LA FUNCIONALIDAD DE SEGUROS
+*------------------------------------------------------------------------------------------
+* Modification History :
+* Autor    	Fecha     		Version.
+* SFUSILLO 	11.09.2017 		Initial Code
+* SFUSILLO 					Esta rutina se utiliza para la funcionalidad de SEGUROS 
+*							y realiza cambios al comportamiento de sus campos
+*------------------------------------------------------------------------------------------
+    $INSERT I_COMMON
+    $INSERT I_ENQUIRY.COMMON
+    $INSERT I_EQUATE
+	$INSERT I_F.EB.SLV.ALTA.SEGURO
+	$INSERT I_F.CUSTOMER
+	$INSERT I_F.SLV.CUS.ZONA.PAIS
+	$INSERT I_F.SLV.CUS.MUNICIPIO
+	$INSERT I_F.SLV.CUS.DEPARTAMENTO 
+	$INSERT I_TSS.COMMON
+    $INSERT I_GTS.COMMON 
+	
+
+    GOSUB INIT
+    GOSUB OPENFILE
+    GOSUB READFILE
+    GOSUB PROCESS
+
+
+    RETURN
+
+INIT:
+;*ARCHIVOS
+    FN.ALTA.SEG 	= 'F.EB.SLV.ALTA.SEGURO'
+    F.ALTA.SEG	= ''
+    FN.CUSTOMER = 'F.CUSTOMER'
+    F.CUSTOMER	= ''
+    FN.ZONE				='F.EB.SLV.CUS.ZONA.PAIS'
+	F.ZONE				=''
+	FN.MUNI				='F.EB.SLV.CUS.MUNICIPIO'
+	F.MUNI				=''
+	FN.DPTO				='F.EB.SLV.CUS.DEPARTAMENTO'
+	F.DPTO				=''	
+	VAR.ZON.ID			=''
+	VAR.DPT.ID			=''
+	VAR.MUN.ID			=''
+	VAR.ZON				=''
+	VAR.DPT				=''
+	VAR.MUN				=''
+
+	ARR.LOCAL.FIELD.CUS	=''
+	VAR.TIPO.PERSONA=''
+	
+	APPL.NAME = 'CUSTOMER'
+	FLD.NAME  = 'LF.DUI':VM:'LF.NIT':VM:'LF.ZONA.3':VM:'LF.DEPTO.3':VM:'LF.MUNICIPIO.3':VM:'LF.CANTON.3':VM:'LF.COLONIA.3':VM:'LF.CALLE.3':VM:'LF.AVENIDA.3':VM:'LF.NUM.DEPTO.3':VM:'SEGMENT'
+	FLD.POS   = ''
+		    
+	CALL MULTI.GET.LOC.REF(APPL.NAME,FLD.NAME,FLD.POS)
+		
+	LOCPOSDui = FLD.POS<1,1>
+	LOCPOSNit = FLD.POS<1,2>
+	LOCPOSZona = FLD.POS<1,3>
+	LOCPOSDepto = FLD.POS<1,4>
+	LOCPOSMuni = FLD.POS<1,5>
+	LOCPOSCanton = FLD.POS<1,6>
+	LOCPOSColonia = FLD.POS<1,7>
+	LOCPOSCalle = FLD.POS<1,8>
+	LOCPOSAvenida = FLD.POS<1,9>
+	LOCPOSNroCasa = FLD.POS<1,10>
+	LOCPOSSegment = FLD.POS<1,11>
+
+	VAR.BANCO.EMISOR=R.NEW(EB.SEG.BANCO.EMISOR)
+
+
+ RETURN
+
+*APERTURA DE ARCHIVOS A USAR
+OPENFILE:
+    CALL OPF(FN.ALTA.SEG,F.ALTA.SEG)
+    CALL OPF(FN.CUSTOMER,F.CUSTOMER)
+	CALL OPF(FN.ZONE,F.ZONE)
+	CALL OPF(FN.DPTO,F.DPTO)
+	CALL OPF(FN.MUNI,F.MUNI)
+RETURN
+
+READFILE:
+;*Consultando registo del cliente Pagador
+CALL F.READ (FN.CUSTOMER,VAR.CUSTOMER.ID,R.CUS,F.CUSTOMER,CUS.ERR)
+ARR.LOCAL.FIELD.CUS = (R.CUS)
+;*consultando id guardados en CUSTOMER
+VAR.ZON.ID=ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSZona>
+VAR.DPT.ID=ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSDepto>
+VAR.MUN.ID=ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSMuni>
+CALL F.READ(FN.ZONE,VAR.ZON.ID,R.ZONE,F.ZONE,ZONE.ERR)
+CALL F.READ(FN.DPTO,VAR.DPT.ID,R.DPTO,F.DPTO,DPTO.ERR)
+CALL F.READ(FN.MUNI,VAR.MUN.ID,R.MUNI,F.MUNI,MUNI.ERR)
+
+RETURN
+
+PROCESS:
+*-------------------------------------------------------------------------------------------------------------------------------------
+
+
+*-------------------------------------------------------------
+*Seteo de campos iniciales con la Busqueda de cliente pagador
+*-------------------------------------------------------------------------------------------------------------------------------------
+VAR.ZON = R.ZONE<EB.SLV84.DESCRIPTION>
+VAR.DPT = R.DPTO<EB.SLV43.DESCRIPTION>
+VAR.MUN = R.MUNI<EB.SLV33.DESCRIPTION>
+
+VAR.TIPO.PERSONA=ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSSegment>
+S.COLONI=ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSColonia>
+S.CANTON=ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSCanton>
+S.CALLE =ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSCalle>
+S.AVENID=ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSAvenida>
+S.NOCASA=ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSNroCasa>
+S.DUI   =ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSDui>
+S.NIT   =ARR.LOCAL.FIELD.CUS<EB.CUS.LOCAL.REF><1,LOCPOSNit>
+;*Componiedo direccion
+S.ADDRESS		   ="DUI: ":S.DUI:"; NIT: ":S.NIT;*:CHAR(13)
+;*Colonia
+S.ADDRESS=S.ADDRESS:"; DIRECCION: Colonia ":S.COLONI
+;*dando trantamiendo en caso de ausencia de datos
+BEGIN CASE
+	CASE S.CANTON NE '' 
+	S.ADDRESS=S.ADDRESS:", ":S.CANTON
+END CASE
+BEGIN CASE
+	CASE S.AVENID NE '' 
+	S.ADDRESS=S.ADDRESS:", Av. ":S.AVENID
+END CASE
+BEGIN CASE
+	CASE S.CALLE NE '' 
+	S.ADDRESS=S.ADDRESS:", Calle ":S.CALLE
+END CASE
+
+
+BEGIN CASE
+	CASE ARR.LOCAL.FIELD.CUS NE ''
+		S.ADDRESS=S.ADDRESS:", Casa #":S.NOCASA
+		S.ADDRESS=S.ADDRESS:", ":VAR.MUN:", ":VAR.DPT
+		CALL SLV.UTIL.ENBLE.DIS.FIELD(EB.SEG.CUSTOMER.ID,'NOEDIT')
+		R.NEW(EB.SEG.REASON)=S.ADDRESS		 
+		R.NEW(EB.SEG.TITULAR)=VAR.CUSTOMER.ID
+		R.NEW(EB.SEG.RESERVADO.1)=VAR.CUSTOMER.ID:VAR.MEDIO.PAGO
+	END CASE
+*--------------------------------------------------------------------------------------------------------------------------------------
+
+
+*-------------------------------------------------------------
+*Seteo de campos cuando cambia Cliente Asegurado
+*-------------------------------------------------------------------------------------------------------------------------------------
+
+BEGIN CASE
+	CASE VAR.CUSTOMER.ID NE '' AND ((VAR.ASEGURADO NE '' AND VAR.CUSTOMER.ID EQ VAR.ASEGURADO) OR (VAR.TIPO.PERSONA EQ 2))
+		R.NEW(EB.SEG.PARENTESCO.PAG)=''
+		CALL SLV.UTIL.ENBLE.DIS.FIELD(EB.SEG.PARENTESCO.PAG,'NOEDIT')
+	CASE VAR.CUSTOMER.ID NE '' AND VAR.ASEGURADO NE '' AND VAR.CUSTOMER.ID NE VAR.ASEGURADO AND VAR.TIPO.PERSONA EQ 1 
+		CALL SLV.UTIL.ENBLE.DIS.FIELD(EB.SEG.PARENTESCO.PAG,'EDIT')
+	CASE VAR.CUSTOMER.ID NE '' AND VAR.ASEGURADO NE '' AND VAR.CUSTOMER.ID EQ VAR.ASEGURADO AND VAR.TIPO.PERSONA EQ 1 AND CAMPO.VALIDAR EQ 'ASEGURADO'
+		R.NEW(EB.SEG.PARENTESCO.PAG)=''
+END CASE
+CALL F.READ (FN.CUSTOMER,VAR.ASEGURADO,R.CUS,F.CUSTOMER,CUS.ERR)
+	BEGIN CASE
+		CASE R.CUS NE ''
+			DATE.OF.BIRTH=OCONV(R.CUS<EB.CUS.DATE.OF.BIRTH>,'DI')
+			DATE.OF.BIRTH=RIGHT ('00':OCONV(DATE.OF.BIRTH,'DD'),2):'/':RIGHT ('00':OCONV(DATE.OF.BIRTH,'DM'),2):'/':OCONV(DATE.OF.BIRTH,'DY')
+			R.NEW(EB.SEG.FECHA.NAC)=DATE.OF.BIRTH 	
+	END CASE
+*--------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+*-------------------------------------------------------------
+*Seteo de campos cuando cambia medio de pago
+*-------------------------------------------------------------------------------------------------------------------------------------
+BEGIN CASE
+CASE  VAR.MEDIO.PAGO NE '' AND UPCASE(VAR.MEDIO.PAGO) EQ 'TCA'
+R.NEW(EB.SEG.BANCO.EMISOR)='BANCO AZUL DE EL SALVADOR'
+R.NEW(EB.SEG.MARCA.EMISORA)='VISA'
+CALL SLV.UTIL.ENBLE.DIS.FIELD(EB.SEG.BANCO.EMISOR:FM:EB.SEG.FECHA.VENCIMIENTO,'NOEDIT':FM:'NOEDIT')
+
+CASE VAR.MEDIO.PAGO NE '' AND UPCASE(VAR.MEDIO.PAGO) NE 'TCA' AND VAR.BANCO.EMISOR EQ 'BANCO AZUL DE EL SALVADOR' 
+CALL SLV.UTIL.ENBLE.DIS.FIELD(EB.SEG.BANCO.EMISOR:FM:EB.SEG.FECHA.VENCIMIENTO,'EDIT':FM:'EDIT')
+R.NEW(EB.SEG.BANCO.EMISOR)=''
+R.NEW(EB.SEG.MARCA.EMISORA)=''
+
+END CASE
+
+BEGIN CASE
+       CASE OFS$OPERATION NE 'VALIDATE' AND CAMPO.VALIDAR EQ 'ASEGURADO' AND R.CUS NE ''
+	        CALL GET.LOC.REF('CUSTOMER','SEGMENT',LOCPOSSegment)
+			VAR.VALID.TIPO.PERSONA= R.CUS<EB.CUS.LOCAL.REF><1,LOCPOSSegment>
+			
+			BEGIN CASE
+				CASE VAR.VALID.TIPO.PERSONA EQ 2
+				V_NAME_FIELD= EB.SEG.ASEGURADO
+				STRERR ='EB-SEG002':FM:V.MENSAJE
+				GOSUB CRT_ERROR
+			END CASE
+			
+			   VAR.VALID.FECHA.NAC=R.CUS<EB.CUS.DATE.OF.BIRTH>
+			   VAR.DATE.TODAY=TODAY
+			   VAR.VALID.ANIO=OCONV(OCONV(VAR.VALID.FECHA.NAC,'DI'),'DY')
+			   VAR.VALID.FECHA.NAC.NUM=OCONV(VAR.VALID.FECHA.NAC,'DI')
+			   VAR.DATE.TODAY.YEAR=OCONV(OCONV(VAR.DATE.TODAY,'DI'),'DY')
+			   VAR.DATE.TODAY.NUM=OCONV(VAR.DATE.TODAY, 'DI')
+			   VAR.MES.DIA=RIGHT ('00':OCONV(VAR.VALID.FECHA.NAC.NUM,'DM'),2):RIGHT ('00':OCONV(VAR.VALID.FECHA.NAC.NUM,'DD'),2)
+			   VAR.DATE=(OCONV(VAR.DATE.TODAY.YEAR:VAR.MES.DIA,'DI'))
+			BEGIN CASE 
+			   CASE VAR.DATE.TODAY.NUM GE VAR.DATE 
+			   VAR.YEARS.OLD=VAR.DATE.TODAY.YEAR-VAR.VALID.ANIO
+			   CASE 1
+			   VAR.YEARS.OLD=VAR.DATE.TODAY.YEAR-VAR.VALID.ANIO-1
+			END CASE
+			
+			BEGIN CASE 
+				CASE VAR.YEARS.OLD LT 18 
+				V_NAME_FIELD= EB.SEG.FECHA.NAC
+				STRERR ='EB-SEG001'
+				R.NEW(EB.SEG.ASEGURADO)=COMI
+				COMI=DATE.OF.BIRTH
+				GOSUB CRT_ERROR 
+			END CASE           
+END CASE 
+
+
+*----------------------------------------------------------------------------------------------------------------------------------------
+
+  
+
+RETURN
+
+CRT_ERROR:
+    AF  = V_NAME_FIELD
+    AV 	= 1
+    ETEXT = STRERR 
+    CALL STORE.END.ERROR
+    RETURN
+
+END
+    
+    
+   

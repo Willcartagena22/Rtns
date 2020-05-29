@@ -1,0 +1,138 @@
+*-----------------------------------------------------------------------------
+* <Rating>-57</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.MAPP.OFS.PAGO
+*-----------------------------------------------------------------------------
+*-----------------------------------------------------------------------------
+*rutina para trasladar fondos bloqueado de moneda azul a la cuenta 
+*transitoria de Punto Xpress
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+$INSERT I_COMMON
+$INSERT I_EQUATE
+$INSERT I_F.FUNDS.TRANSFER
+$INSERT I_F.AC.LOCKED.EVENTS
+$INSERT I_F.EB.SLV.CANAL.MONEDAZUL
+$INSERT I_F.EB.SLV.STM.FAVORITES
+$INSERT I_F.EB.SLV.CLIENT.EXT	
+
+*-----------------------------------------------------------------------------
+
+GOSUB INIT
+GOSUB OPENFILE
+GOSUB PROCESS
+
+RETURN
+
+INIT:
+	FN.EB.CANAL.MA = 'F.EB.SLV.CANAL.MONEDAZUL'
+	F.EB.CANAL.MA = ''
+	
+	Y.ACC.PE.GP = 'ACC.MONEDA.PE'
+	TRANS.ID = ''
+	R.FT     = ''
+	ID.PARAM.OFS =''
+
+	
+RETURN
+
+OPENFILE:
+	CALL OPF(FN.EB.CANAL.MA, F.EB.CANAL.MA)
+
+RETURN
+ 
+PROCESS:
+
+
+	CALL GET.LOC.REF('AC.LOCKED.EVENTS','LF.ID.CHQ.COL', ID.CHQ.COL)	
+	
+	Y.CANAL = R.NEW(AC.LCK.LOCAL.REF)<1,ID.CHQ.COL>
+	Y.CANAL.ID = FIELD(Y.CANAL, '_', 1)
+	
+	;*Obtener cuenta de punto xpress
+	CALL F.READ(FN.EB.CANAL.MA, Y.CANAL.ID, R.EB.CANAL.MA,F.EB.CANAL.MA,E.EB.CANAL.MA)
+	ACC.PE.GP = 'MOVIL'
+	ID.PARAM.OFS = R.EB.CANAL.MA<EB.SLV96.RESERVADO.1>
+	Y.TRANS.TYPE = R.EB.CANAL.MA<EB.SLV96.RESERVADO.2>
+	
+	
+	;*Enviar OFS para credito a cuenta de puntos xpress
+	CALL GET.LOC.REF('FUNDS.TRANSFER','LF.ID.COL', LF.ID.MAPE)
+	CALL GET.LOC.REF('FUNDS.TRANSFER','LF.COLECTOR.COD', COLECTOR.COD)
+	
+
+	R.FT<FT.TRANSACTION.TYPE> 	='AC'
+	R.FT<FT.DEBIT.CURRENCY> 	= 'USD'
+	R.FT<FT.DEBIT.ACCT.NO>    	= R.NEW(AC.LCK.ACCOUNT.NUMBER)
+	R.FT<FT.DEBIT.AMOUNT> 	 	= R.NEW(AC.LCK.LOCKED.AMOUNT)
+	R.FT<FT.CREDIT.ACCT.NO>  	= 'MOVIL'
+	R.FT<FT.ORDERING.CUST>      = ID.NEW
+	R.FT<FT.LOCAL.REF,LF.ID.MAPE> = 'APP'
+	R.FT<FT.LOCAL.REF,COLECTOR.COD> = R.NEW(AC.LCK.LOCAL.REF)<1,ID.CHQ.COL>
+	
+	;*Para cumplimiento
+	;*------------- Guardar datos de cliente externo ------------
+	GOSUB SAVE.CLI.EXT
+	
+	;*Envio de OFS en Linea
+    CALL SLV.OFS.UTIL.OL.TRX(TRANS.ID, R.FT, ID.PARAM.OFS, Y.OUT)
+		
+RETURN
+
+SAVE.CLI.EXT:	
+	
+	;*Obtener datos de favorito
+	FN.FAV = 'F.EB.SLV.STM.FAVORITES'
+	F.FAV = ''
+	CALL OPF(FN.FAV,F.FAV)
+		
+	CALL GET.LOC.REF('AC.LOCKED.EVENTS','LF.CHQ.BENEFICI', CHQ.BENEFICI)
+	ID.FAV = R.NEW(AC.LCK.LOCAL.REF)<1,CHQ.BENEFICI>
+	;*Datos de Favoritos
+	CALL F.READ(FN.FAV,ID.FAV,R.FAV,F.FAV,E.FAV)
+	
+	CALL GET.LOC.REF('FUNDS.TRANSFER','LF.DOC.CLIEN.EX', DOC.CLIEN.EX)
+	R.FT<FT.LOCAL.REF,DOC.CLIEN.EX> = R.FAV<EB.SLV83.DOCUMENT>
+
+ 	FN.CLIENT.EXT= 'FBNK.EB.SLV.CLIENT.EXT'
+	STMT.CLIENT.EXT  = "SELECT " : FN.CLIENT.EXT : " WITH "
+	STMT.CLIENT.EXT := " NUMERO.DOCUMENTO EQ " : R.FAV<EB.SLV83.DOCUMENT>
+
+	CALL EB.READLIST(STMT.CLIENT.EXT, LIST.CLIENT.EXT, '', NO.REC, SYSTEM.RETURN.CODE)	
+			
+	IF LIST.CLIENT.EXT EQ '' THEN
+		FN.SAVE.CE = 'F.EB.SLV.CLIENT.EXT'
+		F.SAVE.CE = ''
+		CALL OPF(FN.SAVE.CE,F.SAVE.CE)
+		
+		ID.SAVE.CE = R.FAV<EB.SLV83.DOCUMENT>:'.':R.NEW(AC.LCK.ACCOUNT.NUMBER)				
+		
+		CALL F.READ(FN.SAVE.CE,ID.SAVE.CE,R.SAVE.CE,F.SAVE.CE,E.SAVE.CE)
+		IF R.SAVE.CE EQ '' THEN 
+			;*llenar datos de campo de eb.slv.cli.ext
+			R.SAVE.CE<EB.CLIENT.E.TIPO.DOCUMENTO> = '01 DOCTO UNICO IDENT'
+			R.SAVE.CE<EB.CLIENT.E.NUMERO.DOCUMENTO> = R.FAV<EB.SLV83.DOCUMENT>
+			R.SAVE.CE<EB.CLIENT.E.NOMBRE.COMPLETO> = R.FAV<EB.SLV83.NAME>
+			TEXTO.ARCHIVO = 'R.SAVE.CE ->':R.SAVE.CE
+			GOSUB ESCRIBIR.ARCHIVO
+			
+			CALL F.WRITE(FN.SAVE.CE,ID.SAVE.CE,R.SAVE.CE)
+		END
+	END
+	 	
+RETURN
+
+ESCRIBIR.ARCHIVO:
+    DIR.NAME= 'COLECTORES'
+    R.ID   = 'PAGO.MONEDA.APP.':TODAY:'.txt'
+    OPENSEQ DIR.NAME,R.ID TO SEQ.PTR
+    WRITESEQ TEXTO.ARCHIVO APPEND TO SEQ.PTR THEN
+ END
+    CLOSESEQ SEQ.PTR
+    
+RETURN
+
+
+END

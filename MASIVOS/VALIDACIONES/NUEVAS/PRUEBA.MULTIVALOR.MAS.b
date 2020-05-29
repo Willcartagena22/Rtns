@@ -1,0 +1,69 @@
+*-----------------------------------------------------------------------------
+* <Rating>-40</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE PRUEBA.MULTIVALOR.MAS
+*-----------------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+$INSERT I_COMMON
+$INSERT I_EQUATE
+$INSERT I_F.EB.SLV.VALIDACIONES.MASIVOS
+*-----------------------------------------------------------------------------
+
+GOSUB INIT
+GOSUB OPENED
+GOSUB LIMPIAR
+
+INIT:
+FN.EB.SLV.VALIDACIONES.MASIVOS='F.EB.SLV.VALIDACIONES.MASIVOS'
+F.EB.SLV.VALIDACIONES.MASIVOS=''
+RETURN
+
+OPENED:
+CALL OPF(FN.EB.SLV.VALIDACIONES.MASIVOS, F.EB.SLV.VALIDACIONES.MASIVOS)
+RETURN
+
+PROGRAMA:
+
+AA='LEGAL.ISS.DATE.1*Fecha no valida: DAFD~LF.DUI*DUI Incorrecto: 000000ASF~LF.NIT*NIT Incorrecto: 123456~LEGAL.ID.1*NIT Incorrecto: 123456~NAME.2*Tipo de dato incorrecto, Solo Alfabeticos: 1231~GIVEN.NAMES*Tipo de dato incorrecto, Solo Alfabeticos: 12~TEXT*Tipo de dato incorrecto, Solo Alfabeticos: 12~FAMILY.NAME*Tipo de dato incorrecto, Solo Alfabeticos: 423~'
+
+ TRAMA.MULTIVALOR.X2 = CHANGE(AA,'~',VM)
+
+    CANTIDAD.REGISTROS.MULTIVALOR.X2 = DCOUNT(TRAMA.MULTIVALOR.X2,VM)-1 
+    FOR J = 1 TO CANTIDAD.REGISTROS.MULTIVALOR.X2
+
+        SEGMENTO.X2 = FIELD(TRAMA.MULTIVALOR.X2,VM,J)
+        MARKER.FIELD = FIELD(SEGMENTO.X2,'*',1)
+        MARKER.VALUE = FIELD(SEGMENTO.X2,'*',2)
+		CRT MARKER.FIELD
+		CRT MARKER.VALUE
+
+		REC.VAL<EB.SLV30.NOMBRE.CAMPO,J> = MARKER.FIELD
+		REC.VAL<EB.SLV30.VALIDACION,J> = MARKER.VALUE
+		REC.VAL<EB.SLV30.ESTADO,J> = 'ACTIVO'
+		EC.VAL<EB.SLV30.FECHA> = TODAY
+		IDV='ITEM1'
+		CALL F.WRITE(FN.EB.SLV.VALIDACIONES.MASIVOS, IDV, REC.VAL)
+		CALL JOURNAL.UPDATE(FN.EB.SLV.VALIDACIONES.MASIVOS)	
+     
+    NEXT J
+RETURN
+
+
+LIMPIAR:
+IDV='BKML1549316721248.18663426275672101'
+CALL F.READ(FN.EB.SLV.VALIDACIONES.MASIVOS, IDV, REC.VAL, F.EB.SLV.VALIDACIONES.MASIVOS, ERR.VAL.MAS)
+IF REC.VAL THEN
+		REC.VAL<EB.SLV30.ESTADO> = ''
+		REC.VAL<EB.SLV30.FECHA> =''
+		REC.VAL<EB.SLV30.NOMBRE.CAMPO>=''
+		REC.VAL<EB.SLV30.VALIDACION>=''
+		CALL F.WRITE(FN.EB.SLV.VALIDACIONES.MASIVOS, IDV, REC.VAL)
+		CALL JOURNAL.UPDATE(FN.EB.SLV.VALIDACIONES.MASIVOS)	
+
+END
+
+RETURN        
+END

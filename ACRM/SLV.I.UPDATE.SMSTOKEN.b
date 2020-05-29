@@ -1,0 +1,151 @@
+*-----------------------------------------------------------------------------
+* <Rating>39</Rating>
+*-----------------------------------------------------------------------------
+SUBROUTINE SLV.I.UPDATE.SMSTOKEN
+*-----------------------------------------------------------------------------
+*
+*-----------------------------------------------------------------------------
+* Modification History :
+*-----------------------------------------------------------------------------
+$INSERT I_COMMON
+$INSERT I_EQUATE
+
+$INSERT I_TSS.COMMON
+$INSERT I_GTS.COMMON
+*-----------------------------------------------------------------------------
+
+$INSERT I_F.CUSTOMER
+$INSERT I_F.EB.EXTERNAL.USER.DEVICE
+$INSERT I_F.EB.EXTERNAL.USER
+*-----------------------------------------------------------------------------
+
+ 	GOSUB INIT
+	IF OFS$OPERATION EQ 'PROCESS' THEN
+    	GOSUB PROCESS
+	END
+
+	RETURN
+
+INIT:
+	Y.VERSION = APPLICATION:PGM.VERSION
+    
+    FN.EXT.US = 'F.EB.EXTERNAL.USER'
+    F.EXT.US = ''
+    CALL OPF(FN.EXT.US,F.EXT.US)
+
+    FN.EXTERNAL.USER.DEVICE = 'F.EB.EXTERNAL.USER.DEVICE'
+    F.EXT.USER.DEVICE = ''
+    CALL OPF(FN.EXTERNAL.USER.DEVICE,F.EXT.USER.DEVICE)
+
+    FN.CUS = 'F.CUSTOMER'
+    F.CUS =''
+    CALL OPF(FN.CUS,F.CUS)
+RETURN
+
+PROCESS:
+*	Y.CUSTOMER.ID2 = ID.NEW
+	Y.CUSTOMER.ID2 = ID.NEW
+*    Y.CUSTOMER.ID2 = '101403'
+*    Y.VERSION = 'CUSTOMER,SLV.MOD.PN'
+
+    IF Y.VERSION EQ 'CUSTOMER,SLV.INPUT' OR Y.VERSION EQ 'CUSTOMER,SLV.MOD.PN' THEN
+        Y.SELECT.EXTUSR = 'SELECT ' :FN.EXT.US: ' WITH CUSTOMER EQ ' : Y.CUSTOMER.ID2 : ' AND STATUS EQ ACTIVE AND USER.TYPE EQ PERSONAL'
+    END
+    
+    IF Y.VERSION EQ 'CUSTOMER,SLV.JURIDICO' OR Y.VERSION EQ 'CUSTOMER,SLV.MOD.PJ' THEN
+        Y.SELECT.EXTUSR = 'SELECT ' :FN.EXT.US: ' WITH CUSTOMER EQ ' : Y.CUSTOMER.ID2 : ' AND STATUS EQ ACTIVE AND USER.TYPE EQ CORPORATE'
+    END
+    
+    CALL EB.READLIST(Y.SELECT.EXTUSR , LIST.ARR, '', NO.OF.RECS.EXT, Y.ERR)
+*	NO.OF.RECS.EXT = 1
+*	LIST.ARR<1> = 'RMORAN19'
+	 
+	IF NO.OF.RECS.EXT NE 0 THEN
+    	Y.SELECT.EXTUSR.DEV = 'SELECT ' : FN.EXTERNAL.USER.DEVICE : ' WITH USER.ID EQ ' : LIST.ARR<1> : ' AND DEVICE.TYPE EQ ' : '"SMS Token"'
+        CALL EB.READLIST(Y.SELECT.EXTUSR.DEV , LIST.ARR.EXT.DEV, '', NO.OF.RECS.DEV, Y.ERR)
+
+		IF NO.OF.RECS.DEV NE 0 THEN
+			FOR K = 1 TO NO.OF.RECS.DEV
+           		CALL F.READ(FN.EXTERNAL.USER.DEVICE, LIST.ARR.EXT.DEV<K>, EXT.DEV.REC, F.EXT.USER.DEVICE, ERR.EXT.DEV)
+            	
+            	IF EXT.DEV.REC THEN		
+					CALL F.READ(FN.EXTERNAL.USER.DEVICE, LIST.ARR.EXT.DEV<K>, EXT.DEV.REC, F.EXT.USER.DEVICE, ERR.EXT.DEV)
+            		Y.ID.EXT.DEV = LIST.ARR.EXT.DEV<K>
+            		Y.NAME.USER  = EXT.DEV.REC<EB.EXDEV.USER.ID>
+            		Y.NUM.CEL = R.NEW(EB.CUS.SMS.1)
+            		
+            		IF Y.NUM.CEL EQ '' THEN
+                		Y.NUM.CEL = 'N/A'
+            		END
+            		
+            		GOSUB UPDATE.SMS.HID
+            	END	
+			NEXT K
+		END
+		ELSE
+			Y.NAME.USER = LIST.ARR<1>
+			Y.NUM.CEL = R.NEW(EB.CUS.SMS.1)
+			IF Y.NUM.CEL EQ '' THEN
+            	Y.NUM.CEL = 'N/A'
+            END
+			GOSUB UPDATE.HID
+		END
+	END
+RETURN
+
+UPDATE.SMS.HID:
+*	Y.NUM.CEL = R.NEW(EB.CUS.SMS.1)
+    Y.METODO = 'updatePhone'
+*	Y.IN.PARAMETER =  Y.IP:'%M':Y.ID:'%M':Y.NUM.SERIE
+    Y.IN.PARAMETER =  Y.NAME.USER:'%M':Y.NUM.CEL
+    R.OUT.DATA = ''
+    CALL SLV.GET.APIHID(Y.METODO, Y.IN.PARAMETER, R.OUT.DATA)
+
+    Y.COD = FIELD(R.OUT.DATA,'%M',1)
+    Y.MSG = FIELD(R.OUT.DATA,'%M',2)
+    IF Y.COD EQ '01' THEN
+        GOSUB OFS.SEND
+    END
+    ELSE
+    	E = Y.MSG
+    	CALL ERR
+    END
+
+RETURN
+
+
+OFS.SEND:
+
+    OFS.SRC = "SLVOFS"
+;*Envio de OFS en Linea
+*    	CALL SLV.UTIL.OFS.(TRANS.ID, R.FT, ID.PARAM.OFS, Y.OUT)
+*    	CALL SLV.OFS.UTIL.OL.TRX(TRANS.ID,R.FT,ID.PARAM.OFS,Y.OUT)
+    VAL.OMG.ST.MSG=''
+*		EB.EXTERNAL.USER.DEVICE,SLV.SOFTTOKEN.AUTH
+    VAL.OMG.ST.MSG = "EB.EXTERNAL.USER.DEVICE,SLV.SOFTTOKEN.AUTH,//,":Y.ID.EXT.DEV:",SOFT.NUMBER=": Y.NUM.CEL
+*       VAL.OMG.ST.MSG = "SLV.ACNOS.STOCK,RELEASE,//,":Y.STOCK.ID:",STATUS=NEW,BRANCH=":AC.IND.GEN.PARAM:",ACCOUNT.ID=":ACCOUNT.NO:",CHQ.PRINTED=50"
+*    CRT VAL.OMG.ST.MSG
+    CALL OFS.POST.MESSAGE(VAL.OMG.ST.MSG,'',OFS.SRC,'')
+*		CALL SLV.UTIL.OFS.TRX(TRANS.ID,R.FT,ID.PARAM.OFS,Y.OUT)
+RETURN
+
+UPDATE.HID:
+	Y.METODO = 'updatePhone'
+
+    Y.IN.PARAMETER =  Y.NAME.USER:'%M':Y.NUM.CEL
+    R.OUT.DATA = ''
+    CALL SLV.GET.APIHID(Y.METODO, Y.IN.PARAMETER, R.OUT.DATA)
+
+    Y.COD = FIELD(R.OUT.DATA,'%M',1)
+    Y.MSG = FIELD(R.OUT.DATA,'%M',2)
+    IF Y.COD EQ '01' THEN
+		RETURN
+    END
+    ELSE
+    	E = Y.MSG
+    	CALL ERR
+    END
+	
+RETURN
+*-----------------------------------------------------------------------------
+END
